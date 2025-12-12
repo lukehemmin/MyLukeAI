@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: mylukeai-postgres
+    environment:
+      POSTGRES_DB: mylukeai
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - mylukeai-network
+
+  app:
+    build: .
+    container_name: mylukeai-app
+    environment:
+      DATABASE_URL: postgresql://postgres:postgres@postgres:5432/mylukeai
+      NEXTAUTH_URL: http://localhost:3000
+      NEXTAUTH_SECRET: your-secret-key-here
+      GITHUB_CLIENT_ID: your-github-client-id
+      GITHUB_CLIENT_SECRET: your-github-client-secret
+      OPENAI_API_KEY: your-openai-api-key
+    ports:
+      - "3000:3000"
+    depends_on:
+      - postgres
+    networks:
+      - mylukeai-network
+    volumes:
+      - ./prisma:/app/prisma
+    command: >
+      sh -c "
+        npx prisma generate &&
+        npx prisma migrate deploy &&
+        npm start
+      "
+
+volumes:
+  postgres_data:
+
+networks:
+  mylukeai-network:
+    driver: bridge
