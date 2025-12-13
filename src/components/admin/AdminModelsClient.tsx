@@ -1,26 +1,27 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { RefreshCw, RotateCcw, Search, Trash2 } from 'lucide-react'
-
+import { ArrowDown, ArrowUp, Check, RefreshCw, RotateCcw, Search, Settings2, Trash2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
-import { 
-  Table, 
-  TableBody, 
-  TableCell, 
-  TableHead, 
-  TableHeader, 
-  TableRow 
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow
 } from '@/components/ui/table'
-import { bulkDeleteModels, deleteModel, resetAllModels, syncModels, updateModel } from '@/lib/actions/admin-models'
+import { bulkDeleteModels, deleteModel, resetAllModels, setDefaultModel, syncModels, updateModel, updateModelOrder } from '@/lib/actions/admin-models'
+import { cn } from '@/lib/utils'
 
 interface Model {
   id: string
@@ -29,6 +30,8 @@ interface Model {
   name: string
   isEnabled: boolean
   isPublic: boolean
+  order: number
+  isDefault: boolean
   createdAt: Date
   updatedAt: Date
   apiKey?: {
@@ -44,7 +47,10 @@ const getApiKeyLabel = (model: Model) => model.apiKey?.name || '기본 그룹 (A
 
 export default function AdminModelsClient({ initialModels }: AdminModelsClientProps) {
   const router = useRouter()
-  const [models, setModels] = useState<Model[]>(initialModels)
+  // 정렬된 상태로 초기화 & 로컬 상태 관리 시 순서 반영
+  const [models, setModels] = useState<Model[]>(() =>
+    [...initialModels].sort((a, b) => a.order - b.order)
+  )
   const [isSyncing, setIsSyncing] = useState(false)
   const [isResetting, setIsResetting] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
@@ -53,11 +59,30 @@ export default function AdminModelsClient({ initialModels }: AdminModelsClientPr
   const [apiKeyFilter, setApiKeyFilter] = useState<string>('all')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [selectedModel, setSelectedModel] = useState<Model | null>(null)
+
+  // 순서 설정 다이얼로그 상태
+  const [isOrderDialogOpen, setIsOrderDialogOpen] = useState(false)
+  const [orderedModels, setOrderedModels] = useState<Model[]>([])
+  const [defaultModelId, setDefaultModelId] = useState<string>('')
+
   const [modalState, setModalState] = useState({
     name: '',
     isEnabled: false,
     isPublic: false
   })
+
+  useEffect(() => {
+    if (isOrderDialogOpen) {
+      // 다이얼로그 열릴 때 활성화된 모델만 가져와서 순서대로 정렬
+      const activeModels = models
+        .filter(m => m.isEnabled)
+        .sort((a, b) => a.order - b.order)
+      setOrderedModels(activeModels)
+
+      const defaultModel = models.find(m => m.isDefault)
+      setDefaultModelId(defaultModel?.id || activeModels[0]?.id || '')
+    }
+  }, [isOrderDialogOpen, models])
 
   const apiKeyOptions = useMemo(() => {
     const names = new Set<string>()
@@ -223,6 +248,61 @@ export default function AdminModelsClient({ initialModels }: AdminModelsClientPr
     }
   }
 
+  // 순서 변경 핸들러
+  const moveModel = (index: number, direction: 'up' | 'down') => {
+    if (direction === 'up' && index === 0) return
+    if (direction === 'down' && index === orderedModels.length - 1) return
+
+    const newOrderedModels = [...orderedModels]
+    const targetIndex = direction === 'up' ? index - 1 : index + 1
+
+    // Swap
+    const temp = newOrderedModels[index]
+    newOrderedModels[index] = newOrderedModels[targetIndex]
+    newOrderedModels[targetIndex] = temp
+
+    setOrderedModels(newOrderedModels)
+  }
+
+  // 순서 및 기본 설정 저장
+  const handleSaveOrder = async () => {
+    setIsSaving(true)
+    try {
+      // 1. 순서 업데이트 데이터 생성
+      const orderUpdates = orderedModels.map((model, index) => ({
+        id: model.id,
+        order: index
+      }))
+
+      // 2. 서버 액션 호출 (순서)
+      await updateModelOrder(orderUpdates)
+
+      // 3. 서버 액션 호출 (기본 모델)
+      if (defaultModelId) {
+        await setDefaultModel(defaultModelId)
+      }
+
+      // 4. 로컬 상태 업데이트
+      setModels(prev => {
+        const next = prev.map(m => {
+          const newOrder = orderUpdates.find(u => u.id === m.id)?.order ?? m.order
+          const isDefault = m.id === defaultModelId
+          return { ...m, order: newOrder, isDefault }
+        })
+        return next.sort((a, b) => a.order - b.order)
+      })
+
+      alert('설정이 저장되었습니다.')
+      setIsOrderDialogOpen(false)
+      router.refresh()
+    } catch (error) {
+      console.error(error)
+      alert('설정 저장 실패')
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -233,9 +313,93 @@ export default function AdminModelsClient({ initialModels }: AdminModelsClientPr
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <Button 
-            variant="destructive" 
-            onClick={handleBulkDelete} 
+          {/* 순서 설정 버튼 추가 */}
+          <Dialog open={isOrderDialogOpen} onOpenChange={setIsOrderDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <Settings2 className="mr-2 h-4 w-4" />
+                모델 순서 설정
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[600px] h-[80vh] flex flex-col">
+              <DialogHeader>
+                <DialogTitle>모델 순서 및 기본 설정</DialogTitle>
+                <DialogDescription>
+                  모델 목록에 표시될 순서와 기본으로 선택될 모델을 설정합니다. (활성화된 모델만 표시됩니다)
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="flex-1 overflow-y-auto py-4 pr-2">
+                <RadioGroup value={defaultModelId} onValueChange={setDefaultModelId}>
+                  <div className="space-y-2">
+                    {orderedModels.length === 0 ? (
+                      <p className="text-center text-muted-foreground py-8">
+                        활성화된 모델이 없습니다.
+                      </p>
+                    ) : (
+                      orderedModels.map((model, index) => (
+                        <div
+                          key={model.id}
+                          className="flex items-center justify-between rounded-lg border p-3 bg-card"
+                        >
+                          <div className="flex items-center gap-3 overflow-hidden">
+                            <div className="flex flex-col gap-1">
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6"
+                                disabled={index === 0}
+                                onClick={() => moveModel(index, 'up')}
+                              >
+                                <ArrowUp className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6"
+                                disabled={index === orderedModels.length - 1}
+                                onClick={() => moveModel(index, 'down')}
+                              >
+                                <ArrowDown className="h-3 w-3" />
+                              </Button>
+                            </div>
+                            <div className="flex flex-col overflow-hidden">
+                              <span className="font-medium truncate">{model.name}</span>
+                              <span className="text-xs text-muted-foreground truncate">{model.apiModelId}</span>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-4 shrink-0">
+                            <div className="flex items-center space-x-2">
+                              <RadioGroupItem value={model.id} id={`default-${model.id}`} />
+                              <Label htmlFor={`default-${model.id}`} className="text-sm font-normal cursor-pointer text-muted-foreground">
+                                기본값
+                              </Label>
+                            </div>
+                            {model.id === defaultModelId && (
+                              <Badge variant="secondary" className="hidden sm:inline-flex">Default</Badge>
+                            )}
+                          </div>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </RadioGroup>
+              </div>
+
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsOrderDialogOpen(false)}>취소</Button>
+                <Button onClick={handleSaveOrder} disabled={isSaving}>
+                  {isSaving && <RefreshCw className="mr-2 h-4 w-4 animate-spin" />}
+                  저장
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          <Button
+            variant="destructive"
+            onClick={handleBulkDelete}
             disabled={selectedIds.size === 0 || isBulkDeleting}
           >
             <Trash2 className={`mr-2 h-4 w-4 ${isBulkDeleting ? 'animate-spin' : ''}`} />
@@ -255,8 +419,8 @@ export default function AdminModelsClient({ initialModels }: AdminModelsClientPr
       <div className="grid gap-3 sm:grid-cols-[1fr_auto] sm:items-center">
         <div className="flex items-center space-x-2">
           <Search className="h-4 w-4 text-muted-foreground" />
-          <Input 
-            placeholder="모델 이름, ID 또는 제공자로 검색..." 
+          <Input
+            placeholder="모델 이름, ID 또는 제공자로 검색..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="max-w-md"
@@ -291,14 +455,15 @@ export default function AdminModelsClient({ initialModels }: AdminModelsClientPr
                 <span className="text-sm font-normal text-muted-foreground">
                   ({groupModels.length}개 모델)
                 </span>
+                {/* 1.3: 기본 모델 표시 */}
               </h3>
-              
+
               <div className="rounded-md border">
                 <Table>
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-[45px]">
-                        <Checkbox 
+                        <Checkbox
                           checked={allSelected ? true : partiallySelected ? 'indeterminate' : false}
                           onCheckedChange={handleSelectAll}
                           aria-label="모두 선택"
@@ -310,17 +475,18 @@ export default function AdminModelsClient({ initialModels }: AdminModelsClientPr
                       <TableHead>표시 이름</TableHead>
                       <TableHead>상태</TableHead>
                       <TableHead>공개</TableHead>
+                      <TableHead className="w-[80px]">기본</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {groupModels.map((model) => (
-                      <TableRow 
-                        key={model.id} 
+                      <TableRow
+                        key={model.id}
                         className="cursor-pointer hover:bg-muted/50"
                         onClick={() => openModelModal(model)}
                       >
                         <TableCell onClick={(e) => e.stopPropagation()}>
-                          <Checkbox 
+                          <Checkbox
                             checked={selectedIds.has(model.id)}
                             onCheckedChange={(checked) => handleRowSelect(model.id, checked)}
                             aria-label="모델 선택"
@@ -345,6 +511,11 @@ export default function AdminModelsClient({ initialModels }: AdminModelsClientPr
                           <Badge variant={model.isPublic ? 'secondary' : 'outline'}>
                             {model.isPublic ? '공개' : '비공개'}
                           </Badge>
+                        </TableCell>
+                        <TableCell>
+                          {model.isDefault && (
+                            <Check className="h-4 w-4 text-primary" />
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -377,7 +548,7 @@ export default function AdminModelsClient({ initialModels }: AdminModelsClientPr
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="model-name">표시 이름</Label>
-                <Input 
+                <Input
                   id="model-name"
                   value={modalState.name}
                   onChange={(e) => setModalState({ ...modalState, name: e.target.value })}
@@ -388,7 +559,7 @@ export default function AdminModelsClient({ initialModels }: AdminModelsClientPr
                   <p className="font-medium">사용 상태</p>
                   <p className="text-sm text-muted-foreground">비활성화 시 관리자 외에 노출되지 않습니다.</p>
                 </div>
-                <Switch 
+                <Switch
                   checked={modalState.isEnabled}
                   onCheckedChange={(checked) => setModalState({ ...modalState, isEnabled: !!checked })}
                 />
@@ -398,7 +569,7 @@ export default function AdminModelsClient({ initialModels }: AdminModelsClientPr
                   <p className="font-medium">공개 여부</p>
                   <p className="text-sm text-muted-foreground">일반 사용자 모델 목록에 포함할지 여부입니다.</p>
                 </div>
-                <Switch 
+                <Switch
                   checked={modalState.isPublic}
                   onCheckedChange={(checked) => setModalState({ ...modalState, isPublic: !!checked })}
                 />
@@ -411,9 +582,9 @@ export default function AdminModelsClient({ initialModels }: AdminModelsClientPr
               닫기
             </Button>
             <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
-              <Button 
-                variant="destructive" 
-                onClick={handleDeleteSingle} 
+              <Button
+                variant="destructive"
+                onClick={handleDeleteSingle}
                 disabled={isSaving || !selectedModel}
                 className="w-full sm:w-auto"
               >

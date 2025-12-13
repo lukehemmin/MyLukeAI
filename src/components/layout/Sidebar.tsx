@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Plus, MessageSquare, Menu, X, Settings, LogOut, User as UserIcon, PanelLeftClose, Shield } from 'lucide-react'
+import { Plus, MessageSquare, Menu, X, Settings, LogOut, User as UserIcon, PanelLeftClose, Shield, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useUIStore } from '@/stores/uiStore'
 import { ThemeToggle } from '@/components/theme-toggle'
@@ -49,6 +49,7 @@ export function Sidebar({
   const router = useRouter()
   const searchParams = useSearchParams()
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
 
   // @ts-ignore
   const currentUser = session?.user || user
@@ -59,6 +60,31 @@ export function Sidebar({
       setIsSettingsOpen(true)
     }
   }, [searchParams])
+
+  const handleDeleteConversation = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation() // 부모 클릭 방지
+    if (!confirm('이 대화를 삭제하시겠습니까?')) return
+
+    setDeletingId(id)
+    try {
+      const res = await fetch(`/api/conversations/${id}`, {
+        method: 'DELETE'
+      })
+
+      if (res.ok) {
+        // 현재 보고 있던 대화라면 메인으로 이동
+        if (currentConversationId === id) {
+          router.push('/')
+        }
+        router.refresh()
+      }
+    } catch (error) {
+      console.error('Failed to delete conversation', error)
+      alert('대화 삭제 중 오류가 발생했습니다.')
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   return (
     <>
@@ -106,15 +132,15 @@ export function Sidebar({
             </div>
           ) : (
             conversations.map((conversation) => (
-              <button
+              <div
                 key={conversation.id}
                 onClick={() => onSelectConversation(conversation.id)}
                 className={`
                     w-full text-left px-3 py-2.5 rounded-lg group transition-all duration-200
-                    flex items-center gap-2 hover:bg-accent/50
+                    flex items-center gap-2 cursor-pointer
                     ${currentConversationId === conversation.id
                     ? 'bg-accent text-accent-foreground font-medium'
-                    : 'text-muted-foreground hover:text-foreground'}
+                    : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'}
                     `}
               >
                 <MessageSquare className="h-4 w-4 shrink-0" />
@@ -124,7 +150,21 @@ export function Sidebar({
                     {new Date(conversation.updatedAt).toLocaleDateString('ko-KR')}
                   </div>
                 </div>
-              </button>
+
+                {/* Delete Button */}
+                <button
+                  onClick={(e) => handleDeleteConversation(e, conversation.id)}
+                  disabled={deletingId === conversation.id}
+                  className={`
+                    opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md
+                    hover:bg-destructive/10 hover:text-destructive
+                    ${deletingId === conversation.id ? 'opacity-50 cursor-not-allowed' : ''}
+                  `}
+                  title="삭제"
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              </div>
             ))
           )}
         </div>

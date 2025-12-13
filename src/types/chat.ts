@@ -47,4 +47,5 @@ export interface ModelConfig {
   badge?: string;
   description?: string;
   enabled: boolean;
+  isDefault?: boolean;
 }

@@ -16,14 +16,14 @@ interface ChatAreaProps {
 }
 
 export function ChatArea({ conversationId, models }: ChatAreaProps) {
-  const { 
-    messages, 
-    isStreaming, 
-    error, 
-    sendMessage, 
-    setMessages, 
-    setCurrentConversation, 
-    clearError, 
+  const {
+    messages,
+    isStreaming,
+    error,
+    sendMessage,
+    setMessages,
+    setCurrentConversation,
+    clearError,
     regenerateLastResponse,
     stopStreaming,
     currentModel,
@@ -51,16 +51,38 @@ export function ChatArea({ conversationId, models }: ChatAreaProps) {
   }, [setMessages])
 
   useEffect(() => {
+    // 모델 목록이 있고, 기본 모델을 설정해야 하는 경우
+    if (models.length > 0) {
+      const defaultModel = models.find(m => m.isDefault) || models[0]
+      // 현재 선택된 모델이 유효하지 않거나 (목록에 없음), 
+      // 초기 상태('gpt-4o-mini')이고 목록에 없는 경우 기본값으로 설정
+      const isCurrentValid = models.some(m => m.id === currentModel)
+
+      if (!isCurrentValid && defaultModel) {
+        setCurrentModel(defaultModel.id)
+      }
+    }
+  }, [models, currentModel, setCurrentModel])
+
+  useEffect(() => {
     if (conversationId) {
       setCurrentConversation(conversationId)
       fetchConversationMessages(conversationId)
     } else {
       setMessages([])
       setCurrentConversation(null)
-    }
-  }, [conversationId, fetchConversationMessages, setCurrentConversation, setMessages])
 
-  
+      // 새 채팅일 경우 기본 모델로 리셋 (선택적)
+      if (models.length > 0) {
+        const defaultModel = models.find(m => m.isDefault) || models[0]
+        if (defaultModel) {
+          setCurrentModel(defaultModel.id)
+        }
+      }
+    }
+  }, [conversationId, fetchConversationMessages, setCurrentConversation, setMessages, models, setCurrentModel])
+
+
 
   const handleSendMessage = async (content: string) => {
     if (!conversationId) return
@@ -104,8 +126,8 @@ export function ChatArea({ conversationId, models }: ChatAreaProps) {
             </div>
           )}
           {error && (
-            <ErrorMessage 
-              error={error} 
+            <ErrorMessage
+              error={error}
               onRetry={error.type === 'network' ? regenerateLastResponse : undefined}
               onClear={clearError}
             />

@@ -212,6 +212,8 @@ model Model {
   
   isEnabled   Boolean  @default(true)  // 사용 가능 여부
   isPublic    Boolean  @default(true)  // 일반 사용자에게 공개 여부
+  order       Int      @default(0)     // 표시 순서 (낮을수록 먼저 표시)
+  isDefault   Boolean  @default(false) // 기본 선택 모델 여부
   
   contextLength Int?   // 컨텍스트 길이 (토큰)
   inputPrice    Float? // 1M 토큰당 입력 가격
@@ -227,6 +229,7 @@ model Model {
 
   @@unique([provider, apiModelId, apiKeyId]) // 제공자와 모델ID, API Key 조합은 유일해야 함
   @@index([isEnabled, isPublic])
+  @@index([order]) // 정렬을 위한 인덱스
 }
 
 // ============================================

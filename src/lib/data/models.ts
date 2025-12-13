@@ -10,7 +10,7 @@ export async function getEnabledModels(): Promise<ModelConfig[]> {
         isPublic: true // Or handle permission based logic if needed
       },
       orderBy: {
-        name: 'asc'
+        order: 'asc' // Sort by order field
       }
     })
 
@@ -24,7 +24,8 @@ export async function getEnabledModels(): Promise<ModelConfig[]> {
       provider: model.provider as any, // Cast or map strictly
       maxTokens: model.contextLength || 128000, // Default fallback
       description: model.description || undefined,
-      enabled: model.isEnabled
+      enabled: model.isEnabled,
+      isDefault: model.isDefault // Map new field
     }))
   } catch (error) {
     console.error('Failed to fetch models from DB:', error)
