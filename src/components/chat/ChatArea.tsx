@@ -8,7 +8,7 @@ import { EmptyState } from './EmptyState'
 import { ErrorMessage } from './ErrorMessage'
 import { LoadingSkeleton } from './LoadingSkeleton'
 import { useEffect, useState, useCallback } from 'react'
-import { useRouter } from 'next/navigation'
+import { useRouter, useParams } from 'next/navigation'
 import { ModelConfig } from '@/types/chat'
 
 interface ChatAreaProps {
@@ -16,7 +16,11 @@ interface ChatAreaProps {
   models: ModelConfig[]
 }
 
-export function ChatArea({ conversationId, models }: ChatAreaProps) {
+export function ChatArea({ conversationId: propConversationId, models }: ChatAreaProps) {
+  // URL 파라미터를 직접 읽어서 soft navigation에서도 올바르게 동작하도록 함
+  const params = useParams()
+  const conversationId = (params?.id as string) || propConversationId
+
   const {
     messages,
     isStreaming,
@@ -68,6 +72,8 @@ export function ChatArea({ conversationId, models }: ChatAreaProps) {
 
   useEffect(() => {
     if (conversationId) {
+      // 먼저 메시지를 초기화하고, 현재 대화를 설정한 후, 메시지를 가져옵니다
+      setMessages([])  // 이전 대화 메시지 클리어
       setCurrentConversation(conversationId)
       fetchConversationMessages(conversationId)
     } else {
@@ -125,7 +131,12 @@ export function ChatArea({ conversationId, models }: ChatAreaProps) {
       // If this was a new conversation, navigate to the new conversation page
       // This ensures the server component receives the correct conversationId prop
       if (!conversationId) {
-        router.push(`/c/${targetConversationId}`)
+        // 먼저 사이드바 업데이트를 위해 서버 컴포넌트 갱신
+        router.refresh()
+        // 짧은 지연 후 새 대화 페이지로 이동 (refresh 완료를 위해)
+        setTimeout(() => {
+          router.push(`/c/${targetConversationId}`)
+        }, 100)
       }
     }
   }

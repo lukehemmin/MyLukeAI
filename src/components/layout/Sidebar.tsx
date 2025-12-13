@@ -76,7 +76,12 @@ export function Sidebar({
         if (currentConversationId === id) {
           router.push('/')
         }
-        router.refresh()
+
+        // 데이터 갱신 (목록 업데이트)
+        // 네비게이션과 충돌을 방지하기 위해 약간의 지연 후 실행
+        setTimeout(() => {
+          router.refresh()
+        }, 100)
       }
     } catch (error) {
       console.error('Failed to delete conversation', error)

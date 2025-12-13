@@ -1,6 +1,6 @@
 'use client'
 
-import { useRouter } from 'next/navigation'
+import { useRouter, useParams } from 'next/navigation'
 import { Sidebar } from './Sidebar'
 // Remove direct Prisma types from client bundle
 import { useEffect } from 'react'
@@ -16,7 +16,7 @@ interface ConversationItem {
 interface MainLayoutClientProps {
   children: React.ReactNode
   conversations: ConversationItem[]
-  currentConversationId?: string
+  currentConversationId?: string // This is optional props but we will override it with params
   user?: {
     name?: string | null
     email?: string | null
@@ -28,10 +28,13 @@ interface MainLayoutClientProps {
 export function MainLayoutClient({
   children,
   conversations,
-  currentConversationId,
+  currentConversationId: propConversationId,
   user
 }: MainLayoutClientProps) {
   const router = useRouter()
+  const params = useParams()
+  const currentConversationId = (params?.id as string) || propConversationId
+
   const { setSidebarOpen, setIsMobile } = useUIStore()
   const isMobile = useIsMobile()
 
