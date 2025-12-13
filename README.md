@@ -134,6 +134,12 @@ npx prisma migrate dev --name <migration-name>
 npx prisma studio
 ```
 
+## 보안 점검
+
+- 저장소 내에 실제 API 키, 토큰, 인증서 등의 비밀값은 포함되어 있지 않습니다.
+- `.env*` 파일은 `.gitignore`로 제외되어 있으며, 예제/테스트 키는 mock 값(`sk-test...`)만 사용합니다.
+- 마이그레이션 및 설정 파일에도 실사용 자격 증명이나 민감한 데이터가 포함되어 있지 않음을 확인했습니다.
+
 ## 라이선스
 
 MIT License
