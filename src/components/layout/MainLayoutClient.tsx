@@ -25,9 +25,9 @@ interface MainLayoutClientProps {
   }
 }
 
-export function MainLayoutClient({ 
-  children, 
-  conversations, 
+export function MainLayoutClient({
+  children,
+  conversations,
   currentConversationId,
   user
 }: MainLayoutClientProps) {
@@ -43,24 +43,7 @@ export function MainLayoutClient({
   }, [isMobile, setIsMobile, setSidebarOpen])
 
   const handleNewConversation = async () => {
-    try {
-      const response = await fetch('/api/conversations', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          title: '새 대화',
-        }),
-      })
-
-      if (response.ok) {
-        const conversation = await response.json()
-        router.push(`/c/${conversation.id}`)
-      }
-    } catch (error) {
-      console.error('Failed to create conversation:', error)
-    }
+    router.push('/')
   }
 
   const handleSelectConversation = (id: string) => {
@@ -69,7 +52,7 @@ export function MainLayoutClient({
 
   return (
     <div className="flex h-screen bg-background">
-      <Sidebar 
+      <Sidebar
         conversations={conversations}
         currentConversationId={currentConversationId}
         onNewConversation={handleNewConversation}

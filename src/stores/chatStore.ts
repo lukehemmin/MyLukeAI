@@ -14,7 +14,7 @@ interface ChatState {
     completionTokens: number
     totalTokens: number
   }
-  
+
   // Actions
   sendMessage: (content: string, conversationId: string) => Promise<void>
   stopStreaming: () => void
@@ -92,27 +92,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
         const { done, value } = await reader!.read()
         if (done) break
 
-        const chunk = decoder.decode(value, { stream: true })
-        const lines = chunk.split('\n').filter(line => line.trim())
+        // toTextStreamResponse() returns plain text, not prefixed data
+        const text = decoder.decode(value, { stream: true })
 
-        for (const line of lines) {
-          try {
-            if (line.startsWith('0:')) {
-              const data = JSON.parse(line.slice(2))
-              if (data.type === 'text-delta') {
-                set((state) => ({
-                  messages: state.messages.map((msg) =>
-                    msg.id === assistantMessage.id
-                      ? { ...msg, content: msg.content + data.value }
-                      : msg
-                  ),
-                }))
-              }
-            }
-          } catch (parseError) {
-            // Skip invalid JSON lines
-            console.warn('Failed to parse streaming data:', parseError)
-          }
+        // Directly append the received text to the assistant message
+        if (text) {
+          set((state) => ({
+            messages: state.messages.map((msg) =>
+              msg.id === assistantMessage.id
+                ? { ...msg, content: msg.content + text }
+                : msg
+            ),
+          }))
         }
       }
     } catch (error) {
@@ -167,18 +158,18 @@ export const useChatStore = create<ChatState>((set, get) => ({
   regenerateLastResponse: async () => {
     const { messages } = get()
     const lastUserMessage = messages.filter(m => m.role === 'user').pop()
-    
+
     if (!lastUserMessage) return
 
     // Remove the last assistant response and regenerate
     const newMessages = messages.slice(0, -1)
     set({ messages: newMessages })
-    
+
     await get().sendMessage(lastUserMessage.content, get().currentConversationId!)
   },
 
   clearError: () => set({ error: null }),
-  
+
   setMessages: (messages) => {
     // Convert Prisma messages to store messages
     const convertedMessages = messages.map(msg => ({
@@ -192,10 +183,10 @@ export const useChatStore = create<ChatState>((set, get) => ({
     }))
     set({ messages: convertedMessages })
   },
-  
+
   setCurrentConversation: (id) => set({ currentConversationId: id }),
-  
+
   setCurrentModel: (model) => set({ currentModel: model }),
-  
+
   updateTokenUsage: (usage) => set({ tokenUsage: usage }),
 }))

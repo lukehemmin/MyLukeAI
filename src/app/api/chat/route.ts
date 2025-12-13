@@ -21,7 +21,7 @@ export const POST = withAuth(async (req: Request, userId: string) => {
     if (!modelConfig) {
       modelConfig = AVAILABLE_MODELS.find(m => m.id === model)
     }
-    
+
     // 모델 유효성 검사
     if (!modelConfig) {
       return new Response('Invalid model', { status: 400 })
@@ -29,23 +29,23 @@ export const POST = withAuth(async (req: Request, userId: string) => {
 
     // 제공자 확인
     const provider = modelConfig.provider
-    
+
     // API 키 가져오기
     let apiKeyId: string | null = null
     let activeKeyApiKey: string | null = null
     let activeKeyBaseUrl: string | null = null
-    
+
     try {
       // 1. 모델에 연결된 특정 API Key가 있으면 사용
       if (modelConfig.apiKey) {
         if (!modelConfig.apiKey.isActive) {
-           return new Response('연결된 API 키가 비활성화되었습니다.', { status: 500 })
+          return new Response('연결된 API 키가 비활성화되었습니다.', { status: 500 })
         }
-        
+
         // Decrypt key
         const { decryptApiKey, deserializeEncryptedData } = await import('@/lib/crypto')
         const encryptedData = deserializeEncryptedData(modelConfig.apiKey.encryptedKeyJson)
-        
+
         apiKeyId = modelConfig.apiKey.id
         activeKeyApiKey = decryptApiKey(encryptedData)
         activeKeyBaseUrl = modelConfig.apiKey.baseUrl || null
@@ -82,7 +82,7 @@ export const POST = withAuth(async (req: Request, userId: string) => {
     let assistantContent = ''
     let startTime = Date.now()
 
-    const openaiProvider = createOpenAI({ 
+    const openaiProvider = createOpenAI({
       apiKey: activeKeyApiKey!,
       baseURL: activeKeyBaseUrl || undefined
     })
@@ -92,7 +92,7 @@ export const POST = withAuth(async (req: Request, userId: string) => {
       abortSignal: req.signal,
       onFinish: async ({ usage }) => {
         const responseTime = Date.now() - startTime
-        
+
         // Save assistant message to database with complete content
         if (conversationId) {
           await prisma.message.create({

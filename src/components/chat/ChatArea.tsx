@@ -8,6 +8,7 @@ import { EmptyState } from './EmptyState'
 import { ErrorMessage } from './ErrorMessage'
 import { LoadingSkeleton } from './LoadingSkeleton'
 import { useEffect, useState, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { ModelConfig } from '@/types/chat'
 
 interface ChatAreaProps {
@@ -31,6 +32,7 @@ export function ChatArea({ conversationId, models }: ChatAreaProps) {
     tokenUsage,
     updateTokenUsage
   } = useChatStore()
+  const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
 
   const fetchConversationMessages = useCallback(async (id: string) => {
@@ -85,8 +87,47 @@ export function ChatArea({ conversationId, models }: ChatAreaProps) {
 
 
   const handleSendMessage = async (content: string) => {
-    if (!conversationId) return
-    await sendMessage(content, conversationId)
+    let targetConversationId = conversationId
+
+    if (!targetConversationId) {
+      try {
+        const response = await fetch('/api/conversations', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            title: content.slice(0, 30), // Use first 30 chars as title
+            model: currentModel,
+          }),
+        })
+
+        if (response.ok) {
+          const newConversation = await response.json()
+          targetConversationId = newConversation.id
+
+          // Set the conversation ID in store before sending message
+          setCurrentConversation(targetConversationId ?? null)
+        } else {
+          console.error('Failed to create conversation')
+          // Optional: Show error to user
+          return
+        }
+      } catch (error) {
+        console.error('Error creating conversation:', error)
+        return
+      }
+    }
+
+    if (targetConversationId) {
+      await sendMessage(content, targetConversationId)
+
+      // If this was a new conversation, navigate to the new conversation page
+      // This ensures the server component receives the correct conversationId prop
+      if (!conversationId) {
+        router.push(`/c/${targetConversationId}`)
+      }
+    }
   }
 
   const handleModelChange = (modelId: string) => {
@@ -121,8 +162,16 @@ export function ChatArea({ conversationId, models }: ChatAreaProps) {
             ))
           )}
           {isStreaming && (
-            <div className="flex items-center space-x-2 text-sm text-muted-foreground px-4">
-              <div className="animate-pulse">AI가 응답하는 중...</div>
+            <div className="flex justify-start">
+              <div className="max-w-prose rounded-lg px-3 py-2 bg-muted">
+                <div className="flex items-center gap-2 text-sm text-foreground/80">
+                  <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+                  </span>
+                  AI가 생각중입니다...
+                </div>
+              </div>
             </div>
           )}
           {error && (
@@ -136,7 +185,7 @@ export function ChatArea({ conversationId, models }: ChatAreaProps) {
         </div>
       </div>
       <div className="bg-background p-0 pb-4">
-        <ChatInput onSend={handleSendMessage} onStop={handleStopStreaming} isStreaming={isStreaming} disabled={isStreaming} />
+        <ChatInput onSend={handleSendMessage} onStop={handleStopStreaming} isStreaming={isStreaming} />
       </div>
     </div>
   )
