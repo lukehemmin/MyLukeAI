@@ -25,10 +25,15 @@ function Verify2FAForm() {
     setError('')
 
     try {
-      await verify2FALogin(code)
-      // 성공 시, 강제 리로드를 통해 미들웨어와 세션을 갱신합니다.
-      // router.push() 대신 window.location.href를 사용하면 확실하게 서버 상태를 다시 받아옵니다.
-      window.location.href = callbackUrl
+      const result = await verify2FALogin(code)
+      if (result.success) {
+        // 성공 시, 강제 리로드를 통해 미들웨어와 세션을 갱신합니다.
+        // router.push() 대신 window.location.href를 사용하면 확실하게 서버 상태를 다시 받아옵니다.
+        window.location.href = callbackUrl
+      } else {
+        setError(result.error || '인증에 실패했습니다.')
+        setIsLoading(false)
+      }
     } catch (err: any) {
       setError(err.message || '인증에 실패했습니다.')
       setIsLoading(false)

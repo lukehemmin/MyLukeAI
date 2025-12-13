@@ -45,7 +45,10 @@ export async function enableTwoFactor(token: string, secret: string) {
   })
 
   // 현재 세션도 인증된 것으로 표시
-  await verify2FALogin(token)
+  const result = await verify2FALogin(token)
+  if (!result.success) {
+    throw new Error(result.error)
+  }
 
   return { success: true }
 }
@@ -87,7 +90,7 @@ export async function getTwoFactorStatus() {
 export async function verify2FALogin(token: string) {
   const session = await auth()
   if (!session?.user?.id) {
-    throw new Error('로그인이 필요합니다.')
+    return { success: false, error: '로그인이 필요합니다.' }
   }
 
   // 사용자 정보 및 시크릿 가져오기
@@ -97,12 +100,12 @@ export async function verify2FALogin(token: string) {
   })
 
   if (!user || !user.twoFactorEnabled || !user.twoFactorSecret) {
-    throw new Error('2단계 인증이 활성화되지 않았습니다.')
+    return { success: false, error: '2단계 인증이 활성화되지 않았습니다.' }
   }
 
   const isValid = authenticator.verify({ token, secret: user.twoFactorSecret })
   if (!isValid) {
-    throw new Error('잘못된 인증 코드입니다.')
+    return { success: false, error: '잘못된 인증 코드입니다.' }
   }
 
   // 세션 찾기 및 업데이트
@@ -118,7 +121,7 @@ export async function verify2FALogin(token: string) {
     (await cookieStore).get('__Secure-next-auth.session-token')?.value
 
   if (!sessionToken) {
-    throw new Error('세션을 찾을 수 없습니다.')
+    return { success: false, error: '세션을 찾을 수 없습니다.' }
   }
 
   await prisma.session.update({

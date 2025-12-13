@@ -24,6 +24,11 @@ const sidebarItems = [
     icon: KeyIcon
   },
   {
+    name: '모델 관리',
+    href: '/admin/models',
+    icon: ServerStackIcon
+  },
+  {
     name: '사용 통계',
     href: '/admin/stats',
     icon: ChartBarIcon
@@ -32,11 +37,6 @@ const sidebarItems = [
     name: '감사 로그',
     href: '/admin/audit-logs',
     icon: ShieldCheckIcon
-  },
-  {
-    name: '모델 관리',
-    href: '/admin/models',
-    icon: ServerStackIcon
   },
   {
     name: '시스템 상태',
@@ -59,11 +59,11 @@ export function AdminSidebar() {
         <h1 className="text-xl font-bold text-gray-800">관리자</h1>
         <p className="text-sm text-gray-600 mt-1">MyLukeAI 관리</p>
       </div>
-      
+
       <nav className="mt-6">
         {sidebarItems.map((item) => {
           const isActive = pathname === item.href
-          
+
           return (
             <Link
               key={item.name}
