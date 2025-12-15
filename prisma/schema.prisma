@@ -214,6 +214,7 @@ model Model {
   isPublic    Boolean  @default(true)  // 일반 사용자에게 공개 여부
   order       Int      @default(0)     // 표시 순서 (낮을수록 먼저 표시)
   isDefault   Boolean  @default(false) // 기본 선택 모델 여부
+  supportsStreaming Boolean @default(false) // 스트림 응답 지원 여부
   
   contextLength Int?   // 컨텍스트 길이 (토큰)
   inputPrice    Float? // 1M 토큰당 입력 가격

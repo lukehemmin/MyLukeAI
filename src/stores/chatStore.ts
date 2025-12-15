@@ -85,25 +85,40 @@ export const useChatStore = create<ChatState>((set, get) => ({
         throw new Error(`HTTP error! status: ${response.status}`)
       }
 
-      const reader = response.body?.getReader()
-      const decoder = new TextDecoder()
+      const contentType = response.headers.get('Content-Type') || ''
 
-      while (true) {
-        const { done, value } = await reader!.read()
-        if (done) break
+      // 비스트리밍 응답 (JSON)
+      if (contentType.includes('application/json')) {
+        const data = await response.json()
+        set((state) => ({
+          messages: state.messages.map((msg) =>
+            msg.id === assistantMessage.id
+              ? { ...msg, content: data.content }
+              : msg
+          ),
+        }))
+      } else {
+        // 스트리밍 응답
+        const reader = response.body?.getReader()
+        const decoder = new TextDecoder()
 
-        // toTextStreamResponse() returns plain text, not prefixed data
-        const text = decoder.decode(value, { stream: true })
+        while (true) {
+          const { done, value } = await reader!.read()
+          if (done) break
 
-        // Directly append the received text to the assistant message
-        if (text) {
-          set((state) => ({
-            messages: state.messages.map((msg) =>
-              msg.id === assistantMessage.id
-                ? { ...msg, content: msg.content + text }
-                : msg
-            ),
-          }))
+          // toTextStreamResponse() returns plain text, not prefixed data
+          const text = decoder.decode(value, { stream: true })
+
+          // Directly append the received text to the assistant message
+          if (text) {
+            set((state) => ({
+              messages: state.messages.map((msg) =>
+                msg.id === assistantMessage.id
+                  ? { ...msg, content: msg.content + text }
+                  : msg
+              ),
+            }))
+          }
         }
       }
     } catch (error) {

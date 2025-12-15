@@ -30,6 +30,7 @@ interface Model {
   name: string
   isEnabled: boolean
   isPublic: boolean
+  supportsStreaming: boolean
   order: number
   isDefault: boolean
   createdAt: Date
@@ -68,7 +69,8 @@ export default function AdminModelsClient({ initialModels }: AdminModelsClientPr
   const [modalState, setModalState] = useState({
     name: '',
     isEnabled: false,
-    isPublic: false
+    isPublic: false,
+    supportsStreaming: false
   })
 
   useEffect(() => {
@@ -170,7 +172,8 @@ export default function AdminModelsClient({ initialModels }: AdminModelsClientPr
     setModalState({
       name: model.name,
       isEnabled: model.isEnabled,
-      isPublic: model.isPublic
+      isPublic: model.isPublic,
+      supportsStreaming: model.supportsStreaming
     })
   }
 
@@ -191,7 +194,8 @@ export default function AdminModelsClient({ initialModels }: AdminModelsClientPr
       const payload = {
         name: trimmedName,
         isEnabled: modalState.isEnabled,
-        isPublic: modalState.isPublic
+        isPublic: modalState.isPublic,
+        supportsStreaming: modalState.supportsStreaming
       }
       await updateModel(selectedModel.id, payload)
       setModels(prev => prev.map(model => model.id === selectedModel.id ? { ...model, ...payload } : model))
@@ -572,6 +576,16 @@ export default function AdminModelsClient({ initialModels }: AdminModelsClientPr
                 <Switch
                   checked={modalState.isPublic}
                   onCheckedChange={(checked) => setModalState({ ...modalState, isPublic: !!checked })}
+                />
+              </div>
+              <div className="flex items-center justify-between rounded-md border p-3">
+                <div>
+                  <p className="font-medium">스트림 응답</p>
+                  <p className="text-sm text-muted-foreground">활성화 시 AI 응답이 실시간으로 스트리밍됩니다.</p>
+                </div>
+                <Switch
+                  checked={modalState.supportsStreaming}
+                  onCheckedChange={(checked) => setModalState({ ...modalState, supportsStreaming: !!checked })}
                 />
               </div>
             </div>

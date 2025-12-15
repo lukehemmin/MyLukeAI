@@ -1,4 +1,4 @@
-import { streamText } from 'ai'
+import { streamText, generateText } from 'ai'
 import { withAuth } from '@/lib/auth/middleware'
 import { prisma } from '@/lib/prisma/client'
 import { DEFAULT_MODEL, AVAILABLE_MODELS } from '@/lib/constants/models'
@@ -29,6 +29,9 @@ export const POST = withAuth(async (req: Request, userId: string) => {
 
     // 제공자 확인
     const provider = modelConfig.provider
+
+    // 스트리밍 지원 여부 (DB 모델은 필드 사용, static은 기본 false)
+    const supportsStreaming = modelConfig.supportsStreaming ?? false
 
     // API 키 가져오기
     let apiKeyId: string | null = null
@@ -79,72 +82,144 @@ export const POST = withAuth(async (req: Request, userId: string) => {
       })
     }
 
-    let assistantContent = ''
-    let startTime = Date.now()
+    const startTime = Date.now()
 
     const openaiProvider = createOpenAI({
       apiKey: activeKeyApiKey!,
       baseURL: activeKeyBaseUrl || undefined
     })
-    const result = await streamText({
+
+    // 스트리밍 모드
+    if (supportsStreaming) {
+      let assistantContent = ''
+
+      const result = await streamText({
+        model: openaiProvider(apiModelId),
+        messages,
+        abortSignal: req.signal,
+        onFinish: async ({ usage }) => {
+          const responseTime = Date.now() - startTime
+
+          // Save assistant message to database with complete content
+          if (conversationId) {
+            await prisma.message.create({
+              data: {
+                conversationId,
+                role: 'assistant',
+                content: assistantContent,
+                tokens: usage?.totalTokens,
+              }
+            })
+          }
+
+          // Log token usage
+          if (usage && 'promptTokens' in usage && 'completionTokens' in usage) {
+            await prisma.tokenUsage.create({
+              data: {
+                userId,
+                model,
+                promptTokens: (usage as any).promptTokens,
+                completionTokens: (usage as any).completionTokens,
+              }
+            })
+          }
+
+          // API 키 사용 기록 (오류 여부에 관계없이 기록)
+          if (apiKeyId) {
+            try {
+              await recordApiKeyUsage({
+                apiKeyId,
+                endpoint: '/api/chat',
+                model,
+                tokens: usage?.totalTokens,
+                status: 'success',
+                responseTime,
+                errorMessage: undefined
+              })
+            } catch (usageError) {
+              console.error('API 키 사용 기록 실패:', usageError)
+            }
+          }
+        },
+        onChunk: ({ chunk }) => {
+          // Accumulate the content for database storage
+          if (chunk.type === 'text-delta') {
+            assistantContent += (chunk as any).value ?? (chunk as any).text ?? ''
+          }
+        },
+      })
+
+      return result.toTextStreamResponse()
+    }
+
+    // 비스트리밍 모드 (전체 응답 완료 후 전송)
+    const result = await generateText({
       model: openaiProvider(apiModelId),
       messages,
       abortSignal: req.signal,
-      onFinish: async ({ usage }) => {
-        const responseTime = Date.now() - startTime
-
-        // Save assistant message to database with complete content
-        if (conversationId) {
-          await prisma.message.create({
-            data: {
-              conversationId,
-              role: 'assistant',
-              content: assistantContent,
-              tokens: usage?.totalTokens,
-            }
-          })
-        }
-
-        // Log token usage
-        if (usage && 'promptTokens' in usage && 'completionTokens' in usage) {
-          await prisma.tokenUsage.create({
-            data: {
-              userId,
-              model,
-              promptTokens: (usage as any).promptTokens,
-              completionTokens: (usage as any).completionTokens,
-            }
-          })
-        }
-
-        // API 키 사용 기록 (오류 여부에 관계없이 기록)
-        if (apiKeyId) {
-          try {
-            await recordApiKeyUsage({
-              apiKeyId,
-              endpoint: '/api/chat',
-              model,
-              tokens: usage?.totalTokens,
-              status: 'success',
-              responseTime,
-              errorMessage: undefined
-            })
-          } catch (usageError) {
-            console.error('API 키 사용 기록 실패:', usageError)
-          }
-        }
-      },
-      onChunk: ({ chunk }) => {
-        // Accumulate the content for database storage
-        if (chunk.type === 'text-delta') {
-          assistantContent += (chunk as any).value ?? (chunk as any).text ?? ''
-        }
-      },
     })
 
-    return result.toTextStreamResponse()
+    const responseTime = Date.now() - startTime
+    const assistantContent = result.text
+    const usage = result.usage
+
+    // Save assistant message to database
+    if (conversationId) {
+      await prisma.message.create({
+        data: {
+          conversationId,
+          role: 'assistant',
+          content: assistantContent,
+          tokens: usage?.totalTokens,
+        }
+      })
+    }
+
+    // Log token usage
+    if (usage && 'promptTokens' in usage && 'completionTokens' in usage) {
+      await prisma.tokenUsage.create({
+        data: {
+          userId,
+          model,
+          promptTokens: (usage as any).promptTokens,
+          completionTokens: (usage as any).completionTokens,
+        }
+      })
+    }
+
+    // API 키 사용 기록
+    if (apiKeyId) {
+      try {
+        await recordApiKeyUsage({
+          apiKeyId,
+          endpoint: '/api/chat',
+          model,
+          tokens: usage?.totalTokens,
+          status: 'success',
+          responseTime,
+          errorMessage: undefined
+        })
+      } catch (usageError) {
+        console.error('API 키 사용 기록 실패:', usageError)
+      }
+    }
+
+    // JSON 응답 반환 (비스트리밍)
+    return new Response(JSON.stringify({
+      content: assistantContent,
+      usage: usage ? {
+        promptTokens: (usage as any).promptTokens,
+        completionTokens: (usage as any).completionTokens,
+        totalTokens: (usage as any).totalTokens,
+      } : null,
+    }), {
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    })
   } catch (error) {
     console.error('Chat API error:', error)
     return new Response('Internal server error', { status: 500 })
   }
 })
+

@@ -22,6 +22,7 @@ interface UpdateModelPayload {
   name?: string
   isEnabled?: boolean
   isPublic?: boolean
+  supportsStreaming?: boolean
 }
 
 // 모델 동기화 액션
