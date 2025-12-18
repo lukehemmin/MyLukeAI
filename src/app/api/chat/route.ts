@@ -113,15 +113,23 @@ export const POST = withAuth(async (req: Request, userId: string) => {
           }
 
           // Log token usage
-          if (usage && 'promptTokens' in usage && 'completionTokens' in usage) {
+          console.log('[TokenUsage] Stream finished. Usage:', usage)
+
+          if (usage) {
+            const promptTokens = (usage as any).promptTokens ?? 0
+            const completionTokens = (usage as any).completionTokens ?? 0
+
             await prisma.tokenUsage.create({
               data: {
                 userId,
                 model,
-                promptTokens: (usage as any).promptTokens,
-                completionTokens: (usage as any).completionTokens,
+                promptTokens,
+                completionTokens,
               }
             })
+            console.log(`[TokenUsage] Saved: ${promptTokens}p, ${completionTokens}c`)
+          } else {
+            console.warn('[TokenUsage] No usage data available from stream')
           }
 
           // API 키 사용 기록 (오류 여부에 관계없이 기록)
@@ -131,7 +139,7 @@ export const POST = withAuth(async (req: Request, userId: string) => {
                 apiKeyId,
                 endpoint: '/api/chat',
                 model,
-                tokens: usage?.totalTokens,
+                tokens: usage?.totalTokens ?? 0,
                 status: 'success',
                 responseTime,
                 errorMessage: undefined
@@ -163,6 +171,8 @@ export const POST = withAuth(async (req: Request, userId: string) => {
     const assistantContent = result.text
     const usage = result.usage
 
+    console.log('[TokenUsage] Non-streaming usage:', usage)
+
     // Save assistant message to database
     if (conversationId) {
       await prisma.message.create({
@@ -176,15 +186,21 @@ export const POST = withAuth(async (req: Request, userId: string) => {
     }
 
     // Log token usage
-    if (usage && 'promptTokens' in usage && 'completionTokens' in usage) {
+    if (usage) {
+      const promptTokens = (usage as any).promptTokens ?? 0
+      const completionTokens = (usage as any).completionTokens ?? 0
+
       await prisma.tokenUsage.create({
         data: {
           userId,
           model,
-          promptTokens: (usage as any).promptTokens,
-          completionTokens: (usage as any).completionTokens,
+          promptTokens,
+          completionTokens,
         }
       })
+      console.log(`[TokenUsage] Saved: ${promptTokens}p, ${completionTokens}c`)
+    } else {
+      console.warn('[TokenUsage] No usage data available from non-streaming')
     }
 
     // API 키 사용 기록
@@ -194,7 +210,7 @@ export const POST = withAuth(async (req: Request, userId: string) => {
           apiKeyId,
           endpoint: '/api/chat',
           model,
-          tokens: usage?.totalTokens,
+          tokens: usage?.totalTokens ?? 0,
           status: 'success',
           responseTime,
           errorMessage: undefined
