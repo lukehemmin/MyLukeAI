@@ -7,7 +7,7 @@ import { revalidatePath } from 'next/cache'
 // 통계 데이터 가져오기
 export async function getUsageStats() {
   const session = await auth()
-  
+
   if (session?.user?.role !== 'admin') {
     throw new Error('Unauthorized')
   }
@@ -99,9 +99,19 @@ export async function getUsageStats() {
     }
   })
 
+  // 1-1. 모델 정보 가져오기 (매핑용)
+  const models = await prisma.model.findMany({
+    select: { id: true, name: true }
+  })
+
+  const modelNameMap = models.reduce((acc, model) => {
+    acc[model.id] = model.name
+    return acc
+  }, {} as Record<string, string>)
+
   return {
     modelStats: modelUsage.map(m => ({
-      name: m.model,
+      name: modelNameMap[m.model] || m.model,
       value: (m._sum.promptTokens || 0) + (m._sum.completionTokens || 0)
     })),
     dailyStats: Object.values(dailyStats).sort((a: any, b: any) => a.date.localeCompare(b.date)),
@@ -112,7 +122,7 @@ export async function getUsageStats() {
 // 감사 로그 가져오기
 export async function getAuditLogs(page = 1, limit = 20) {
   const session = await auth()
-  
+
   if (session?.user?.role !== 'admin') {
     throw new Error('Unauthorized')
   }
@@ -143,13 +153,13 @@ export async function getAuditLogs(page = 1, limit = 20) {
 // 시스템 상태 가져오기 (Mock)
 export async function getSystemStatus() {
   const session = await auth()
-  
+
   if (session?.user?.role !== 'admin') {
     throw new Error('Unauthorized')
   }
 
   const os = require('os')
-  
+
   return {
     uptime: os.uptime(),
     loadAvg: os.loadavg(),
@@ -168,7 +178,7 @@ export async function getSystemStatus() {
 // 시스템 설정 가져오기
 export async function getSystemSettings() {
   const session = await auth()
-  
+
   if (session?.user?.role !== 'admin') {
     throw new Error('Unauthorized')
   }
@@ -183,14 +193,14 @@ export async function getSystemSettings() {
 // 시스템 설정 업데이트
 export async function updateSystemSetting(key: string, value: string) {
   const session = await auth()
-  
+
   if (session?.user?.role !== 'admin') {
     throw new Error('Unauthorized')
   }
 
   await prisma.systemSetting.upsert({
     where: { key },
-    update: { 
+    update: {
       value,
       updatedBy: session.user.id
     },

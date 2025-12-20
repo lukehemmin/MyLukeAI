@@ -4,6 +4,18 @@ import { prisma } from '@/lib/prisma/client'
 import { DEFAULT_MODEL, AVAILABLE_MODELS } from '@/lib/constants/models'
 import { getActiveApiKey, recordApiKeyUsage } from '@/lib/api-key-manager'
 import { createOpenAI } from '@ai-sdk/openai'
+import { getEncoding } from 'js-tiktoken'
+
+const encoding = getEncoding('cl100k_base')
+
+function countTokens(text: string): number {
+  try {
+    return encoding.encode(text).length
+  } catch (e) {
+    console.warn('Token counting failed:', e)
+    return 0
+  }
+}
 
 // 모델별 제공자 매핑 제거 (AVAILABLE_MODELS에서 조회)
 
@@ -115,9 +127,20 @@ export const POST = withAuth(async (req: Request, userId: string) => {
           // Log token usage
           console.log('[TokenUsage] Stream finished. Usage:', usage)
 
-          if (usage) {
-            const promptTokens = (usage as any).promptTokens ?? 0
-            const completionTokens = (usage as any).completionTokens ?? 0
+
+          if (usage || assistantContent) {
+            let promptTokens = usage ? (usage as any).promptTokens ?? 0 : 0
+            let completionTokens = usage ? (usage as any).completionTokens ?? 0 : 0
+
+            // Fallback: Calculate manually if usage is missing
+            if (promptTokens === 0 && completionTokens === 0) {
+              console.warn('[TokenUsage] Usage data missing, calculating manually...')
+              // Calculate prompt tokens from messages
+              const promptText = messages.map((m: any) => m.content).join('\n')
+              promptTokens = countTokens(promptText)
+              // Calculate completion tokens from accumulated content
+              completionTokens = countTokens(assistantContent)
+            }
 
             await prisma.tokenUsage.create({
               data: {
@@ -127,7 +150,7 @@ export const POST = withAuth(async (req: Request, userId: string) => {
                 completionTokens,
               }
             })
-            console.log(`[TokenUsage] Saved: ${promptTokens}p, ${completionTokens}c`)
+            console.log(`[TokenUsage] Saved: ${promptTokens}p, ${completionTokens}c (Source: ${usage ? 'Provider' : 'Manual'})`)
           } else {
             console.warn('[TokenUsage] No usage data available from stream')
           }
@@ -186,9 +209,19 @@ export const POST = withAuth(async (req: Request, userId: string) => {
     }
 
     // Log token usage
-    if (usage) {
-      const promptTokens = (usage as any).promptTokens ?? 0
-      const completionTokens = (usage as any).completionTokens ?? 0
+    // Log token usage
+    if (usage || assistantContent) {
+      let promptTokens = usage ? (usage as any).promptTokens ?? 0 : 0
+      let completionTokens = usage ? (usage as any).completionTokens ?? 0 : 0
+
+      // Fallback: Calculate manually if usage is missing
+      if (promptTokens === 0 && completionTokens === 0) {
+        console.warn('[TokenUsage] Usage data missing (non-stream), calculating manually...')
+        // Calculate prompt tokens from messages
+        const promptText = messages.map((m: any) => m.content).join('\n')
+        promptTokens = countTokens(promptText)
+        completionTokens = countTokens(assistantContent)
+      }
 
       await prisma.tokenUsage.create({
         data: {
@@ -198,7 +231,7 @@ export const POST = withAuth(async (req: Request, userId: string) => {
           completionTokens,
         }
       })
-      console.log(`[TokenUsage] Saved: ${promptTokens}p, ${completionTokens}c`)
+      console.log(`[TokenUsage] Saved: ${promptTokens}p, ${completionTokens}c (Source: ${usage ? 'Provider' : 'Manual'})`)
     } else {
       console.warn('[TokenUsage] No usage data available from non-streaming')
     }
