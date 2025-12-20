@@ -1,10 +1,12 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { Input } from "@/components/ui/input"
 import {
     Table,
     TableBody,
@@ -18,7 +20,7 @@ import {
     getUserConversations,
     getConversationMessages
 } from '@/lib/actions/admin-logs'
-import { ArrowLeft, MessageSquare, Trash2, User as UserIcon, Calendar, CheckCircle, XCircle } from 'lucide-react'
+import { ArrowLeft, MessageSquare, Trash2, User as UserIcon, Calendar, CheckCircle, XCircle, Search } from 'lucide-react'
 import { format } from 'date-fns'
 
 interface UserStats {
@@ -50,24 +52,70 @@ interface Message {
 }
 
 export default function AdminLogsClient() {
+    const router = useRouter()
+    const searchParams = useSearchParams()
     const [view, setView] = useState<'users' | 'conversations' | 'messages'>('users')
     const [users, setUsers] = useState<UserStats[]>([])
+    const [filteredUsers, setFilteredUsers] = useState<UserStats[]>([])
+    const [searchTerm, setSearchTerm] = useState('')
     const [selectedUser, setSelectedUser] = useState<UserStats | null>(null)
     const [conversations, setConversations] = useState<Conversation[]>([])
     const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
     const [messages, setMessages] = useState<Message[]>([])
     const [isLoading, setIsLoading] = useState(false)
 
-    // Load Users
+    // Load Users and handle initial search param
     useEffect(() => {
         if (view === 'users') {
             setIsLoading(true)
             getUsersWithChatStats()
-                .then(res => setUsers(res as unknown as UserStats[]))
+                .then(res => {
+                    const loadedUsers = res as unknown as UserStats[]
+                    setUsers(loadedUsers)
+
+                    // Initial search from URL
+                    const searchParam = searchParams.get('search')
+                    if (searchParam) {
+                        setSearchTerm(searchParam)
+                        const lowerTerm = searchParam.toLowerCase()
+                        setFilteredUsers(loadedUsers.filter(user =>
+                            (user.name?.toLowerCase() || '').includes(lowerTerm) ||
+                            (user.email?.toLowerCase() || '').includes(lowerTerm)
+                        ))
+                    } else {
+                        setFilteredUsers(loadedUsers)
+                    }
+                })
                 .catch(console.error)
                 .finally(() => setIsLoading(false))
         }
-    }, [view])
+    }, [view, searchParams]) // Re-run if searchParams changes (though typically only on mount for this use case)
+
+    // Handle search input change
+    const handleSearch = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const term = e.target.value
+        setSearchTerm(term)
+
+        if (!term.trim()) {
+            setFilteredUsers(users)
+            // Update URL to remove search param
+            const newParams = new URLSearchParams(searchParams.toString())
+            newParams.delete('search')
+            router.replace(`?${newParams.toString()}`, { scroll: false })
+            return
+        }
+
+        const lowerTerm = term.toLowerCase()
+        setFilteredUsers(users.filter(user =>
+            (user.name?.toLowerCase() || '').includes(lowerTerm) ||
+            (user.email?.toLowerCase() || '').includes(lowerTerm)
+        ))
+
+        // Update URL with search param
+        const newParams = new URLSearchParams(searchParams.toString())
+        newParams.set('search', term)
+        router.replace(`?${newParams.toString()}`, { scroll: false })
+    }
 
     const handleUserSelect = async (user: UserStats) => {
         setSelectedUser(user)
@@ -113,8 +161,21 @@ export default function AdminLogsClient() {
         return (
             <Card>
                 <CardHeader>
-                    <CardTitle>사용자 대화 로그</CardTitle>
-                    <CardDescription>사용자별 대화 내역 및 삭제된 대화를 조회합니다.</CardDescription>
+                    <div className="flex justify-between items-start md:items-center flex-col md:flex-row gap-4">
+                        <div>
+                            <CardTitle>사용자 대화 로그</CardTitle>
+                            <CardDescription>사용자별 대화 내역 및 삭제된 대화를 조회합니다.</CardDescription>
+                        </div>
+                        <div className="relative w-full md:w-64">
+                            <Search className="absolute left-2 top-2.5 h-4 w-4 text-muted-foreground" />
+                            <Input
+                                placeholder="이름 또는 이메일 검색"
+                                className="pl-8"
+                                value={searchTerm}
+                                onChange={handleSearch}
+                            />
+                        </div>
+                    </div>
                 </CardHeader>
                 <CardContent>
                     {isLoading ? (
@@ -132,26 +193,34 @@ export default function AdminLogsClient() {
                                 </TableRow>
                             </TableHeader>
                             <TableBody>
-                                {users.map((user) => (
-                                    <TableRow key={user.id}>
-                                        <TableCell className="font-medium">{user.name || 'Unknown'}</TableCell>
-                                        <TableCell>{user.email}</TableCell>
-                                        <TableCell className="text-center">{user.totalConversations}</TableCell>
-                                        <TableCell className="text-center">{user.activeConversations}</TableCell>
-                                        <TableCell className="text-center">
-                                            {user.deletedConversations > 0 ? (
-                                                <Badge variant="destructive">{user.deletedConversations}</Badge>
-                                            ) : (
-                                                <span className="text-muted-foreground">-</span>
-                                            )}
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                            <Button variant="outline" size="sm" onClick={() => handleUserSelect(user)}>
-                                                상세보기
-                                            </Button>
+                                {filteredUsers.length > 0 ? (
+                                    filteredUsers.map((user) => (
+                                        <TableRow key={user.id}>
+                                            <TableCell className="font-medium">{user.name || 'Unknown'}</TableCell>
+                                            <TableCell>{user.email}</TableCell>
+                                            <TableCell className="text-center">{user.totalConversations}</TableCell>
+                                            <TableCell className="text-center">{user.activeConversations}</TableCell>
+                                            <TableCell className="text-center">
+                                                {user.deletedConversations > 0 ? (
+                                                    <Badge variant="destructive">{user.deletedConversations}</Badge>
+                                                ) : (
+                                                    <span className="text-muted-foreground">-</span>
+                                                )}
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                <Button variant="outline" size="sm" onClick={() => handleUserSelect(user)}>
+                                                    상세보기
+                                                </Button>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))
+                                ) : (
+                                    <TableRow>
+                                        <TableCell colSpan={6} className="h-24 text-center">
+                                            검색 결과가 없습니다.
                                         </TableCell>
                                     </TableRow>
-                                ))}
+                                )}
                             </TableBody>
                         </Table>
                     )}
