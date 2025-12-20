@@ -6,10 +6,13 @@ import { prisma } from '@/lib/prisma/client'
 export const GET = withAuth(async (req, userId) => {
   try {
     const conversations = await prisma.conversation.findMany({
-      where: { userId },
+      where: {
+        userId,
+        deletedAt: null // Exclude soft-deleted conversations
+      },
       orderBy: { updatedAt: 'desc' },
     })
-    
+
     return NextResponse.json(conversations)
   } catch (error) {
     console.error('Error fetching conversations:', error)
@@ -24,7 +27,7 @@ export const GET = withAuth(async (req, userId) => {
 export const POST = withAuth(async (req, userId) => {
   try {
     const { title, model } = await req.json()
-    
+
     const conversation = await prisma.conversation.create({
       data: {
         userId,
@@ -32,7 +35,7 @@ export const POST = withAuth(async (req, userId) => {
         model: model || 'gpt-4o-mini',
       },
     })
-    
+
     return NextResponse.json(conversation, { status: 201 })
   } catch (error) {
     console.error('Error creating conversation:', error)

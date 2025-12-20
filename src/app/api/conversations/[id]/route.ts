@@ -6,7 +6,7 @@ import { prisma } from '@/lib/prisma/client'
 export const GET = withAuth(async (req, userId, context) => {
   try {
     const { id } = await context!.params
-    
+
     if (!id) {
       return NextResponse.json(
         { error: 'Conversation ID is required' },
@@ -15,9 +15,9 @@ export const GET = withAuth(async (req, userId, context) => {
     }
 
     const conversation = await prisma.conversation.findFirst({
-      where: { 
+      where: {
         id,
-        userId 
+        userId
       },
       include: {
         messages: {
@@ -47,7 +47,7 @@ export const GET = withAuth(async (req, userId, context) => {
 export const PATCH = withAuth(async (req, userId, context) => {
   try {
     const { id } = await context!.params
-    
+
     if (!id) {
       return NextResponse.json(
         { error: 'Conversation ID is required' },
@@ -92,7 +92,7 @@ export const PATCH = withAuth(async (req, userId, context) => {
 export const DELETE = withAuth(async (req, userId, context) => {
   try {
     const { id } = await context!.params
-    
+
     if (!id) {
       return NextResponse.json(
         { error: 'Conversation ID is required' },
@@ -113,9 +113,24 @@ export const DELETE = withAuth(async (req, userId, context) => {
       )
     }
 
-    await prisma.conversation.delete({
-      where: { id }
+    // Check for chat logging setting
+    const loggingSetting = await prisma.systemSetting.findUnique({
+      where: { key: 'chat_logging_enabled' }
     })
+    const isLoggingEnabled = loggingSetting?.value === 'true'
+
+    if (isLoggingEnabled) {
+      // Soft Delete
+      await prisma.conversation.update({
+        where: { id },
+        data: { deletedAt: new Date() }
+      })
+    } else {
+      // Hard Delete
+      await prisma.conversation.delete({
+        where: { id }
+      })
+    }
 
     return NextResponse.json({ success: true })
   } catch (error) {

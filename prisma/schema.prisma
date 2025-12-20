@@ -89,12 +89,14 @@ model Conversation {
   systemPrompt String?
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
+  deletedAt    DateTime? // Soft Delete support
 
   user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages Message[]
 
   @@index([userId])
   @@index([updatedAt(sort: Desc)])
+  @@index([deletedAt]) // Index for filtering soft-deleted chats
 }
 
 model Message {
@@ -113,6 +115,7 @@ model Message {
   context        Json?
   
   createdAt      DateTime @default(now())
+  deletedAt      DateTime? // Soft Delete support
 
   conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
 

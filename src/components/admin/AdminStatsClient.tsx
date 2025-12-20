@@ -1,7 +1,16 @@
 'use client'
 
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis, PieChart, Pie, Cell } from "recharts"
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
 interface AdminStatsClientProps {
   data: {
@@ -75,27 +84,61 @@ export default function AdminStatsClient({ data }: AdminStatsClientProps) {
           </CardContent>
         </Card>
 
-        <Card className="col-span-3">
+        <Card className="col-span-1 md:col-span-2 lg:col-span-3">
           <CardHeader>
-            <CardTitle>상위 사용자 (토큰 사용량)</CardTitle>
+            <CardTitle>사용자별 상세 통계 (Top 50)</CardTitle>
+            <CardDescription>
+              토큰 사용량이 많은 순서대로 표시됩니다.
+            </CardDescription>
           </CardHeader>
-          <CardContent className="h-[300px]">
-            {data.userStats.length > 0 ? (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={data.userStats} layout="vertical">
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis type="number" />
-                  <YAxis dataKey="name" type="category" width={150} />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="totalTokens" name="총 토큰" fill="#ffc658" />
-                </BarChart>
-              </ResponsiveContainer>
-            ) : (
-              <div className="flex h-full items-center justify-center text-muted-foreground">
-                데이터가 없습니다
-              </div>
-            )}
+          <CardContent>
+            <ScrollArea className="h-[400px] w-full pr-4">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[60px]">순위</TableHead>
+                    <TableHead>사용자</TableHead>
+                    <TableHead className="text-right">총 토큰</TableHead>
+                    <TableHead className="text-right text-muted-foreground hidden md:table-cell">입력 (Prompt)</TableHead>
+                    <TableHead className="text-right text-muted-foreground hidden md:table-cell">출력 (Completion)</TableHead>
+                    <TableHead className="text-right">최근 활동</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.userStats.length > 0 ? (
+                    data.userStats.map((user, index) => (
+                      <TableRow key={user.userId}>
+                        <TableCell className="font-medium">{index + 1}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-col">
+                            <span className="font-medium">{user.name}</span>
+                            <span className="text-xs text-muted-foreground">{user.email}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right font-bold">
+                          {user.totalTokens.toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-right text-muted-foreground hidden md:table-cell">
+                          {user.promptTokens.toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-right text-muted-foreground hidden md:table-cell">
+                          {user.completionTokens.toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-right text-muted-foreground">
+                          {user.lastActive ? new Date(user.lastActive).toLocaleDateString() : '-'}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell colSpan={6} className="h-24 text-center">
+                        데이터가 없습니다.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </ScrollArea>
           </CardContent>
         </Card>
       </div>

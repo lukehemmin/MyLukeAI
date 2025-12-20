@@ -67,19 +67,22 @@ export async function getUsageStats() {
     return acc
   }, {} as Record<string, any>)
 
-  // 3. 사용자별 사용량 Top 5
+  // 3. 사용자별 사용량 Top 50 (테이블 표시용)
   const userUsage = await prisma.tokenUsage.groupBy({
     by: ['userId'],
     _sum: {
       promptTokens: true,
       completionTokens: true,
     },
+    _max: {
+      createdAt: true
+    },
     orderBy: {
       _sum: {
-        completionTokens: 'desc' // 총 토큰으로 정렬하고 싶으나 Prisma 제한으로 completionTokens 기준
+        completionTokens: 'desc'
       }
     },
-    take: 5
+    take: 50
   })
 
   // 사용자 이름 가져오기
@@ -92,10 +95,13 @@ export async function getUsageStats() {
   const userStats = userUsage.map(usage => {
     const user = users.find(u => u.id === usage.userId)
     return {
+      userId: usage.userId,
       name: user?.name || user?.email || 'Unknown',
+      email: user?.email,
       promptTokens: usage._sum.promptTokens || 0,
       completionTokens: usage._sum.completionTokens || 0,
-      totalTokens: (usage._sum.promptTokens || 0) + (usage._sum.completionTokens || 0)
+      totalTokens: (usage._sum.promptTokens || 0) + (usage._sum.completionTokens || 0),
+      lastActive: usage._max.createdAt ? usage._max.createdAt.toISOString() : null
     }
   })
 

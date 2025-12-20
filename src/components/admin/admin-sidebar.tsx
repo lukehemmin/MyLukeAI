@@ -9,7 +9,8 @@ import {
   ShieldCheckIcon,
   CogIcon,
   HomeIcon,
-  ServerStackIcon
+  ServerStackIcon,
+  ChatBubbleLeftRightIcon
 } from '@heroicons/react/24/outline'
 
 const sidebarItems = [
@@ -32,6 +33,11 @@ const sidebarItems = [
     name: '사용 통계',
     href: '/admin/stats',
     icon: ChartBarIcon
+  },
+  {
+    name: '채팅 로그',
+    href: '/admin/logs',
+    icon: ChatBubbleLeftRightIcon
   },
   {
     name: '감사 로그',
