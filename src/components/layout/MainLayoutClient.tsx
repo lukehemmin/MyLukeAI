@@ -11,6 +11,10 @@ interface ConversationItem {
   id: string
   title: string
   updatedAt: Date
+  isPinned: boolean
+  isArchived: boolean
+  isShared: boolean
+  orderIndex: number
 }
 
 interface MainLayoutClientProps {

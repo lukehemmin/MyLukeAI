@@ -91,12 +91,20 @@ model Conversation {
   updatedAt    DateTime  @updatedAt
   deletedAt    DateTime? // Soft Delete support
 
+  // New features
+  isPinned     Boolean   @default(false)
+  isArchived   Boolean   @default(false)
+  isShared     Boolean   @default(false)
+  orderIndex   Int       @default(0)
+
   user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages Message[]
 
   @@index([userId])
   @@index([updatedAt(sort: Desc)])
   @@index([deletedAt]) // Index for filtering soft-deleted chats
+  @@index([isPinned, updatedAt]) // Index for sorting pinned chats
+  @@index([isArchived]) // Index for filtering archived chats
 }
 
 model Message {

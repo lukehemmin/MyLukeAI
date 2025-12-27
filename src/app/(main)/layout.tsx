@@ -9,7 +9,7 @@ export default async function MainLayout({
   children: React.ReactNode
 }) {
   const session = await auth()
-  
+
   if (!session?.user?.id) {
     redirect('/login')
   }
@@ -20,8 +20,15 @@ export default async function MainLayout({
   }
 
   const conversations = await prisma.conversation.findMany({
-    where: { userId: session.user.id },
-    orderBy: { updatedAt: 'desc' },
+    where: {
+      userId: session.user.id,
+      isArchived: false, // 기본적으로 보관된 채팅은 숨김
+    },
+    orderBy: [
+      { isPinned: 'desc' },
+      { orderIndex: 'asc' }, // 커스텀 정렬 순서
+      { updatedAt: 'desc' },
+    ],
     take: 50,
   })
 

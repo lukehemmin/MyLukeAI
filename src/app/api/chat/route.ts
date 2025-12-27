@@ -1,3 +1,4 @@
+/* eslint-disable no-console */
 import { streamText, generateText } from 'ai'
 import { withAuth } from '@/lib/auth/middleware'
 import { prisma } from '@/lib/prisma/client'

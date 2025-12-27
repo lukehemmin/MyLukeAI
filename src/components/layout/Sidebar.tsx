@@ -2,13 +2,15 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { Plus, MessageSquare, Menu, X, Settings, LogOut, User as UserIcon, PanelLeftClose, Shield, Trash2 } from 'lucide-react'
+import { Plus, MessageSquare, Menu, Settings, LogOut, User as UserIcon, PanelLeftClose, Shield, Trash2, Pin, Archive, PinOff, Inbox } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useUIStore } from '@/stores/uiStore'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { useSession, signOut } from 'next-auth/react'
 import Image from 'next/image'
 import { SettingsModal } from '@/components/settings/SettingsModal'
+import { ChatItemMenu } from '@/components/chat/ChatItemMenu'
+import { getArchivedConversations, reorderConversations, togglePinConversation, toggleArchiveConversation, deleteConversation, shareConversation, renameConversation } from '@/lib/actions/conversation'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,11 +19,39 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { ContextMenu, ContextMenuTrigger, ContextMenuContent, ContextMenuItem, ContextMenuSeparator } from '@/components/ui/context-menu'
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragOverlay,
+  DragEndEvent,
+  DragStartEvent
+} from '@dnd-kit/core'
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  useSortable
+} from '@dnd-kit/sortable'
+import { CSS } from '@dnd-kit/utilities'
+import { useToast } from '@/components/ui/use-toast'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 
 interface Conversation {
   id: string
   title: string
   updatedAt: Date
+  isPinned: boolean
+  isArchived: boolean
+  isShared: boolean
+  orderIndex?: number
 }
 
 interface SidebarProps {
@@ -37,8 +67,145 @@ interface SidebarProps {
   }
 }
 
+// Sortable Item Component
+function SortableChatItem({ conversation, currentConversationId, onSelect, onUpdate }: {
+  conversation: Conversation,
+  currentConversationId?: string,
+  onSelect: (id: string) => void,
+  onUpdate: () => void // Callback to refresh local state if needed (mainly for context menu actions)
+}) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging
+  } = useSortable({ id: conversation.id, data: { ...conversation } })
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+    zIndex: isDragging ? 999 : 'auto'
+  }
+
+  const { toast } = useToast()
+
+  // Local state for dialogs
+  const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false)
+  const [newTitle, setNewTitle] = useState(conversation.title)
+
+  const handlePin = async () => {
+    try {
+      await togglePinConversation(conversation.id)
+    } catch { toast({ variant: 'destructive', description: '작업 실패' }) }
+  }
+
+  const handleArchive = async () => {
+    try {
+      await toggleArchiveConversation(conversation.id)
+    } catch { toast({ variant: 'destructive', description: '작업 실패' }) }
+  }
+
+  const handleDelete = async () => {
+    if (!confirm('정말 삭제하시겠습니까?')) return
+    try {
+      await deleteConversation(conversation.id)
+    } catch { toast({ variant: 'destructive', description: '삭제 실패' }) }
+  }
+
+  const handleRename = async () => {
+    try {
+      await renameConversation(conversation.id, newTitle)
+      setIsRenameDialogOpen(false)
+    } catch { toast({ variant: 'destructive', description: '이름 변경 실패' }) }
+  }
+
+  return (
+    <>
+      <ContextMenu>
+        <ContextMenuTrigger>
+          <div
+            ref={setNodeRef}
+            style={style}
+            {...attributes}
+            onClick={() => onSelect(conversation.id)}
+            className={`
+              w-full text-left px-3 py-2.5 rounded-lg group transition-all duration-200
+              flex items-center gap-2 cursor-pointer relative
+              ${currentConversationId === conversation.id
+                ? 'bg-accent text-accent-foreground font-medium'
+                : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'}
+          `}
+            {...listeners} // Apply listeners here for drag interaction
+          >
+            {conversation.isPinned ? (
+              <Pin className="h-4 w-4 shrink-0 rotate-45 text-orange-400" />
+            ) : (
+              <MessageSquare className="h-4 w-4 shrink-0" />
+            )}
+
+            <div className="flex-1 min-w-0 pr-6">
+              <div className="text-sm truncate leading-none mb-1">{conversation.title}</div>
+              <div className="text-[10px] opacity-70 truncate">
+                {new Date(conversation.updatedAt).toLocaleDateString('ko-KR')}
+              </div>
+            </div>
+
+            <div className="absolute right-2 opacity-0 group-hover:opacity-100 transition-opacity" onPointerDown={(e) => e.stopPropagation()}>
+              <ChatItemMenu
+                conversationId={conversation.id}
+                title={conversation.title}
+                isPinned={conversation.isPinned}
+                isArchived={conversation.isArchived}
+                isShared={conversation.isShared}
+              />
+            </div>
+          </div>
+        </ContextMenuTrigger>
+        <ContextMenuContent className="w-48">
+          <ContextMenuItem onClick={handlePin}>
+            {conversation.isPinned ? <PinOff className="mr-2 h-4 w-4" /> : <Pin className="mr-2 h-4 w-4" />}
+            {conversation.isPinned ? '고정 해제' : '상단 고정'}
+          </ContextMenuItem>
+          <ContextMenuItem onClick={() => setIsRenameDialogOpen(true)}>
+            <Settings className="mr-2 h-4 w-4" />
+            이름 변경
+          </ContextMenuItem>
+          <ContextMenuItem onClick={handleArchive}>
+            <Archive className="mr-2 h-4 w-4" />
+            {conversation.isArchived ? '보관 해제' : '보관하기'}
+          </ContextMenuItem>
+          <ContextMenuSeparator />
+          <ContextMenuItem onClick={handleDelete} className="text-destructive focus:text-destructive">
+            <Trash2 className="mr-2 h-4 w-4" />
+            삭제
+          </ContextMenuItem>
+        </ContextMenuContent>
+      </ContextMenu>
+
+      <Dialog open={isRenameDialogOpen} onOpenChange={setIsRenameDialogOpen}>
+        <DialogContent onClick={(e) => e.stopPropagation()}>
+          <DialogHeader>
+            <DialogTitle>채팅방 이름 변경</DialogTitle>
+          </DialogHeader>
+          <div className="py-4">
+            <Label htmlFor={`rename-${conversation.id}`} className="text-right">이름</Label>
+            <Input id={`rename-${conversation.id}`} value={newTitle} onChange={(e) => setNewTitle(e.target.value)} className="mt-2" />
+          </div>
+          <DialogFooter>
+            <Button variant="secondary" onClick={() => setIsRenameDialogOpen(false)}>취소</Button>
+            <Button onClick={handleRename}>저장</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}
+
 export function Sidebar({
-  conversations,
+  conversations: initialConversations,
   currentConversationId,
   onNewConversation,
   onSelectConversation,
@@ -49,46 +216,92 @@ export function Sidebar({
   const router = useRouter()
   const searchParams = useSearchParams()
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
-  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const [isArchivedOpen, setIsArchivedOpen] = useState(false)
+  const [archivedConversations, setArchivedConversations] = useState<Conversation[]>([])
+
+  // Need to manage order locally for DnD
+  const [pinnedConversations, setPinnedConversations] = useState<Conversation[]>([])
+  const [recentConversations, setRecentConversations] = useState<Conversation[]>([])
+  const [activeDragId, setActiveDragId] = useState<string | null>(null)
 
   // @ts-ignore
   const currentUser = session?.user || user
 
   useEffect(() => {
-    // URL 파라미터 감지하여 설정 모달 열기
+    // Separate pinned and recent
+    const pinned = initialConversations.filter(c => c.isPinned).sort((a, b) => ((a.orderIndex || 0) - (b.orderIndex || 0)) || (new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()))
+    // Recent items: Sort by orderIndex first (if manually moved), then fallback to updatedAt
+    const recent = initialConversations.filter(c => !c.isPinned).sort((a, b) => ((a.orderIndex || 0) - (b.orderIndex || 0)) || (new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()))
+
+    setPinnedConversations(pinned)
+    setRecentConversations(recent)
+  }, [initialConversations])
+
+  useEffect(() => {
     if (searchParams.get('openSettings')) {
       setIsSettingsOpen(true)
     }
   }, [searchParams])
 
-  const handleDeleteConversation = async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation() // 부모 클릭 방지
-    if (!confirm('이 대화를 삭제하시겠습니까?')) return
-
-    setDeletingId(id)
-    try {
-      const res = await fetch(`/api/conversations/${id}`, {
-        method: 'DELETE'
-      })
-
-      if (res.ok) {
-        // 현재 보고 있던 대화라면 메인으로 이동
-        if (currentConversationId === id) {
-          router.push('/')
-        }
-
-        // 데이터 갱신 (목록 업데이트)
-        // 네비게이션과 충돌을 방지하기 위해 약간의 지연 후 실행
-        setTimeout(() => {
-          router.refresh()
-        }, 100)
-      }
-    } catch (error) {
-      console.error('Failed to delete conversation', error)
-      alert('대화 삭제 중 오류가 발생했습니다.')
-    } finally {
-      setDeletingId(null)
+  useEffect(() => {
+    if (isArchivedOpen) {
+      getArchivedConversations().then(setArchivedConversations)
     }
+  }, [isArchivedOpen])
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  )
+
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveDragId(event.active.id as string)
+  }
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event
+
+    if (active.id !== over?.id) {
+      // Find which list the active item belongs to
+      const isPinned = pinnedConversations.some(c => c.id === active.id)
+
+      if (isPinned) {
+        setPinnedConversations((items) => {
+          const oldIndex = items.findIndex((item) => item.id === active.id)
+          const newIndex = items.findIndex((item) => item.id === over?.id)
+
+          if (oldIndex === -1 || newIndex === -1) return items // Dragged between lists (not supported yet)
+
+          const newItems = arrayMove(items, oldIndex, newIndex)
+
+          const updates = newItems.map((item, index) => ({
+            id: item.id,
+            orderIndex: index
+          }))
+
+          reorderConversations(updates).catch(err => console.error("Failed to reorder pinned", err))
+          return newItems
+        })
+      } else {
+        setRecentConversations((items) => {
+          const oldIndex = items.findIndex((item) => item.id === active.id)
+          const newIndex = items.findIndex((item) => item.id === over?.id)
+
+          if (oldIndex === -1 || newIndex === -1) return items
+
+          const newItems = arrayMove(items, oldIndex, newIndex)
+
+          const updates = newItems.map((item, index) => ({
+            id: item.id,
+            orderIndex: index
+          }))
+
+          reorderConversations(updates).catch(err => console.error("Failed to reorder recent", err))
+          return newItems
+        })
+      }
+    }
+    setActiveDragId(null)
   }
 
   return (
@@ -131,47 +344,64 @@ export function Sidebar({
 
         {/* Conversations List */}
         <div className="flex-1 overflow-y-auto px-2 py-2 space-y-1 scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent">
-          {conversations.length === 0 ? (
-            <div className="text-center text-xs text-muted-foreground py-8">
-              대화 내역이 없습니다.
-            </div>
-          ) : (
-            conversations.map((conversation) => (
-              <div
-                key={conversation.id}
-                onClick={() => onSelectConversation(conversation.id)}
-                className={`
-                    w-full text-left px-3 py-2.5 rounded-lg group transition-all duration-200
-                    flex items-center gap-2 cursor-pointer
-                    ${currentConversationId === conversation.id
-                    ? 'bg-accent text-accent-foreground font-medium'
-                    : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'}
-                    `}
-              >
-                <MessageSquare className="h-4 w-4 shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <div className="text-sm truncate leading-none mb-1">{conversation.title}</div>
-                  <div className="text-[10px] opacity-70 truncate">
-                    {new Date(conversation.updatedAt).toLocaleDateString('ko-KR')}
-                  </div>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+          >
+            {/* Pinned Section */}
+            {pinnedConversations.length > 0 && (
+              <div className="mb-4">
+                <div className="px-3 py-1 text-xs font-semibold text-muted-foreground flex items-center gap-1">
+                  <Pin className="h-3 w-3" />
+                  <span>Pinned</span>
                 </div>
-
-                {/* Delete Button */}
-                <button
-                  onClick={(e) => handleDeleteConversation(e, conversation.id)}
-                  disabled={deletingId === conversation.id}
-                  className={`
-                    opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded-md
-                    hover:bg-destructive/10 hover:text-destructive
-                    ${deletingId === conversation.id ? 'opacity-50 cursor-not-allowed' : ''}
-                  `}
-                  title="삭제"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
+                <SortableContext items={pinnedConversations.map(c => c.id)} strategy={verticalListSortingStrategy}>
+                  {pinnedConversations.map(conversation => (
+                    <SortableChatItem
+                      key={conversation.id}
+                      conversation={conversation}
+                      currentConversationId={currentConversationId}
+                      onSelect={onSelectConversation}
+                      onUpdate={() => { }}
+                    />
+                  ))}
+                </SortableContext>
               </div>
-            ))
-          )}
+            )}
+
+            {/* Recent Section */}
+            <div className="mb-2">
+              {pinnedConversations.length > 0 && <div className="px-3 py-1 text-xs font-semibold text-muted-foreground">Recent</div>}
+              {recentConversations.length === 0 && pinnedConversations.length === 0 ? (
+                <div className="text-center text-xs text-muted-foreground py-8">
+                  대화 내역이 없습니다.
+                </div>
+              ) : (
+                <SortableContext items={recentConversations.map(c => c.id)} strategy={verticalListSortingStrategy}>
+                  {recentConversations.map(conversation => (
+                    <SortableChatItem
+                      key={conversation.id}
+                      conversation={conversation}
+                      currentConversationId={currentConversationId}
+                      onSelect={onSelectConversation}
+                      onUpdate={() => { }}
+                    />
+                  ))}
+                </SortableContext>
+              )}
+            </div>
+
+            {/* Drag Overlay for smooth visual */}
+            <DragOverlay>
+              {activeDragId ? (
+                <div className="w-full bg-accent/90 p-3 rounded-lg shadow-lg opacity-90 border">
+                  <div className="font-medium text-sm">이동 중...</div>
+                </div>
+              ) : null}
+            </DragOverlay>
+          </DndContext>
         </div>
 
         {/* User / Settings Footer */}
@@ -213,13 +443,16 @@ export function Sidebar({
                   <span>관리자 대시보드</span>
                 </DropdownMenuItem>
               )}
+              <DropdownMenuItem onClick={() => setIsArchivedOpen(true)}>
+                <Archive className="mr-2 h-4 w-4" />
+                <span>보관된 채팅 ({archivedConversations.length > 0 ? archivedConversations.length : ''})</span>
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setIsSettingsOpen(true)}>
                 <Settings className="mr-2 h-4 w-4" />
                 <span>설정</span>
               </DropdownMenuItem>
               <DropdownMenuItem className="text-destructive focus:text-destructive" onClick={async () => {
                 try {
-                  // 2FA 쿠키 삭제 (Server Action)
                   await import('@/lib/actions/two-factor').then(mod => mod.clear2FACookie())
                 } catch (e) {
                   console.error('Failed to clear 2FA cookie', e)
@@ -235,7 +468,7 @@ export function Sidebar({
         </div>
       </div>
 
-      {/* Mobile menu button - handled in ChatHeader for better UX or kept here for mobile-only access when closed */}
+      {/* Mobile menu button */}
       {!sidebarOpen && (
         <Button
           variant="ghost"
@@ -248,6 +481,53 @@ export function Sidebar({
       )}
 
       <SettingsModal open={isSettingsOpen} onOpenChange={setIsSettingsOpen} />
+
+      {/* Archived Chats Dialog */}
+      <Dialog open={isArchivedOpen} onOpenChange={setIsArchivedOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col">
+          <DialogHeader>
+            <DialogTitle>보관된 채팅</DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 overflow-y-auto py-4 space-y-2">
+            {archivedConversations.length === 0 ? (
+              <div className="text-center text-muted-foreground py-10">
+                보관된 채팅이 없습니다.
+              </div>
+            ) : (
+              archivedConversations.map((conversation) => (
+                <div
+                  key={conversation.id}
+                  className="w-full text-left px-4 py-3 rounded-lg border hover:bg-accent flex items-center gap-3 cursor-pointer group"
+                  onClick={() => {
+                    setIsArchivedOpen(false)
+                    onSelectConversation(conversation.id)
+                  }}
+                >
+                  <Archive className="h-5 w-5 text-muted-foreground" />
+                  <div className="flex-1 min-w-0">
+                    <div className="font-medium truncate">{conversation.title}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {new Date(conversation.updatedAt).toLocaleDateString('ko-KR')}
+                    </div>
+                  </div>
+                  <div className="opacity-0 group-hover:opacity-100 transition-opacity">
+                    <ChatItemMenu
+                      conversationId={conversation.id}
+                      title={conversation.title}
+                      isPinned={conversation.isPinned}
+                      isArchived={conversation.isArchived}
+                      isShared={conversation.isShared}
+                      onDelete={() => {
+                        setArchivedConversations(prev => prev.filter(c => c.id !== conversation.id))
+                      }}
+                    />
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }
