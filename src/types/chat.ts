@@ -16,6 +16,7 @@ export interface Message {
   id: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
+  reasoning?: string;
   tokens?: number;
   history?: MessageHistory[];
   context?: MessageContext;

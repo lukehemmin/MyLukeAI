@@ -8,6 +8,7 @@ import { useUIStore } from '@/stores/uiStore'
 import { ThemeToggle } from '@/components/theme-toggle'
 import { useSession, signOut } from 'next-auth/react'
 import Image from 'next/image'
+import { useIsMobile } from '@/hooks/useMediaQuery'
 import { SettingsModal } from '@/components/settings/SettingsModal'
 import { ChatItemMenu } from '@/components/chat/ChatItemMenu'
 import { getArchivedConversations, reorderConversations, togglePinConversation, toggleArchiveConversation, deleteConversation, shareConversation, renameConversation } from '@/lib/actions/conversation'
@@ -212,6 +213,7 @@ export function Sidebar({
   user
 }: SidebarProps) {
   const { sidebarOpen, toggleSidebar } = useUIStore()
+  const isMobile = useIsMobile()
   const { data: session } = useSession()
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -242,6 +244,50 @@ export function Sidebar({
       setIsSettingsOpen(true)
     }
   }, [searchParams])
+
+  // Sidebar Resizing Logic
+  const [sidebarWidth, setSidebarWidth] = useState(260)
+  const [isResizing, setIsResizing] = useState(false)
+
+  useEffect(() => {
+    const savedWidth = localStorage.getItem('sidebar-width')
+    if (savedWidth) {
+      setSidebarWidth(parseInt(savedWidth, 10))
+    }
+  }, [])
+
+  const startResizing = (e: React.MouseEvent) => {
+    e.preventDefault()
+    setIsResizing(true)
+  }
+
+  const stopResizing = () => {
+    setIsResizing(false)
+    localStorage.setItem('sidebar-width', sidebarWidth.toString())
+  }
+
+  const resize = (e: MouseEvent) => {
+    if (isResizing) {
+      const newWidth = e.clientX
+      if (newWidth >= 200 && newWidth <= 480) {
+        setSidebarWidth(newWidth)
+      }
+    }
+  }
+
+  useEffect(() => {
+    if (isResizing) {
+      window.addEventListener('mousemove', resize)
+      window.addEventListener('mouseup', stopResizing)
+    } else {
+      window.removeEventListener('mousemove', resize)
+      window.removeEventListener('mouseup', stopResizing)
+    }
+    return () => {
+      window.removeEventListener('mousemove', resize)
+      window.removeEventListener('mouseup', stopResizing)
+    }
+  }, [isResizing, sidebarWidth])
 
   useEffect(() => {
     if (isArchivedOpen) {
@@ -315,12 +361,21 @@ export function Sidebar({
       )}
 
       {/* Sidebar */}
-      <div className={`
-        fixed inset-y-0 left-0 z-50 w-[260px] bg-[hsl(var(--sidebar-background))] border-r 
-        transform transition-all duration-300 ease-in-out flex flex-col
-        lg:relative
-        ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:w-0 lg:border-none lg:overflow-hidden'}
-      `}>
+      <div
+        className={`
+          fixed inset-y-0 left-0 z-50 bg-[hsl(var(--sidebar-background))] border-r 
+          transform flex flex-col group
+          ${isResizing ? 'transition-none' : 'transition-all duration-300 ease-in-out'}
+          lg:relative
+          ${sidebarOpen ? 'translate-x-0' : '-translate-x-full lg:w-0 lg:border-none lg:overflow-hidden'}
+        `}
+        style={{ width: sidebarOpen && !isMobile ? `${sidebarWidth}px` : undefined }}
+      >
+        {/* Resize Handle */}
+        <div
+          className="absolute right-0 top-0 w-1 h-full cursor-col-resize hover:bg-primary/50 transition-colors z-50 opacity-0 group-hover:opacity-100 hidden lg:block"
+          onMouseDown={startResizing}
+        />
         {/* Header / New Chat */}
         <div className="p-3 border-b border-border/50 flex items-center gap-2">
           <Button

@@ -7,6 +7,7 @@ import { ChatHeader } from './ChatHeader'
 import { EmptyState } from './EmptyState'
 import { ErrorMessage } from './ErrorMessage'
 import { LoadingSkeleton } from './LoadingSkeleton'
+import { TypingIndicator } from './TypingIndicator'
 import { useEffect, useState, useCallback } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { ModelConfig } from '@/types/chat'
@@ -172,19 +173,11 @@ export function ChatArea({ conversationId: propConversationId, models }: ChatAre
               <ChatBubble key={message.id} message={message} />
             ))
           )}
-          {isStreaming && (
-            <div className="flex justify-start">
-              <div className="max-w-prose rounded-lg px-3 py-2 bg-muted">
-                <div className="flex items-center gap-2 text-sm text-foreground/80">
-                  <span className="relative flex h-2 w-2">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
-                  </span>
-                  AI가 생각중입니다...
-                </div>
-              </div>
-            </div>
-          )}
+          {isStreaming && messages.length > 0 &&
+            (!messages[messages.length - 1].content && !messages[messages.length - 1].reasoning) &&
+            messages[messages.length - 1].role === 'assistant' && (
+              <TypingIndicator />
+            )}
           {error && (
             <ErrorMessage
               error={error}
