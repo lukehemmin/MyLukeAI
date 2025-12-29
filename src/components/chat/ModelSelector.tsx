@@ -15,7 +15,7 @@ export function ModelSelector({ value, onChange, models }: ModelSelectorProps) {
 
   return (
     <Select value={value} onValueChange={onChange}>
-      <SelectTrigger className="w-[180px]">
+      <SelectTrigger className="w-auto min-w-[140px]">
         <SelectValue placeholder="모델 선택" />
       </SelectTrigger>
       <SelectContent>

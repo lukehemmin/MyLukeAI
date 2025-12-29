@@ -52,11 +52,18 @@ export async function syncModels() {
         const openai = new OpenAI({ apiKey: decryptedKey })
         const list = await openai.models.list()
 
-        // 3. DB에 업데이트 (Upsert)
-        for (const model of list.data) {
-          // 채팅 모델만 필터링 (gpt 시작하는 것들)
-          if (model.id.startsWith('gpt')) {
-            await prisma.model.upsert({
+        // 제외할 모델 키워드 (Blacklist)
+        const EXCLUDED_KEYWORDS = ['dall-e', 'tts', 'whisper', 'embedding', 'babbage', 'davinci', 'curie', 'ada', 'realtime', 'audio', 'image', 'moderation', 'sora', 'transcribe', 'computer-use']
+
+        // 3. DB에 업데이트 (Parallel Upsert)
+        const upsertPromises = list.data
+          .filter(model => {
+            // 채팅 불가능한 모델만 제외하고 모두 허용
+            const isExcluded = EXCLUDED_KEYWORDS.some(keyword => model.id.includes(keyword))
+            return !isExcluded
+          })
+          .map(model =>
+            prisma.model.upsert({
               where: {
                 provider_apiModelId_apiKeyId: {
                   provider: 'openai',
@@ -74,9 +81,10 @@ export async function syncModels() {
                 apiKeyId: key.id
               }
             })
-            syncedCount++
-          }
-        }
+          )
+
+        await Promise.all(upsertPromises)
+        syncedCount += upsertPromises.length
       } catch (error) {
         console.error(`Failed to sync OpenAI models:`, error)
       }

@@ -41,10 +41,7 @@ export function ChatHeader({
           {sidebarOpen ? <Menu className="h-5 w-5" /> : <PanelLeftOpen className="h-5 w-5" />}
         </Button>
         <div className="lg:hidden font-semibold text-sm">MyLukeAI</div>
-      </div>
-
-      <div className="flex-1 flex justify-center">
-        <div className="flex items-center gap-2 max-w-xs w-full justify-center">
+        <div className="ml-2 flex items-center gap-2 max-w-xs justify-start">
           <ModelSelector
             value={currentModel}
             onChange={onModelChange}

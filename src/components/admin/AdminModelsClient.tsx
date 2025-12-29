@@ -22,6 +22,7 @@ import {
 } from '@/components/ui/table'
 import { bulkDeleteModels, deleteModel, resetAllModels, setDefaultModel, syncModels, updateModel, updateModelOrder } from '@/lib/actions/admin-models'
 import { cn } from '@/lib/utils'
+import { useToast } from '@/components/ui/use-toast'
 
 interface Model {
   id: string
@@ -48,10 +49,16 @@ const getApiKeyLabel = (model: Model) => model.apiKey?.name || '기본 그룹 (A
 
 export default function AdminModelsClient({ initialModels }: AdminModelsClientProps) {
   const router = useRouter()
+  const { toast } = useToast()
   // 정렬된 상태로 초기화 & 로컬 상태 관리 시 순서 반영
   const [models, setModels] = useState<Model[]>(() =>
     [...initialModels].sort((a, b) => a.order - b.order)
   )
+
+  useEffect(() => {
+    setModels([...initialModels].sort((a, b) => a.order - b.order))
+  }, [initialModels])
+
   const [isSyncing, setIsSyncing] = useState(false)
   const [isResetting, setIsResetting] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
@@ -118,12 +125,19 @@ export default function AdminModelsClient({ initialModels }: AdminModelsClientPr
     try {
       const result = await syncModels()
       if (result.success) {
-        alert(`${result.count}개의 모델이 동기화되었습니다.`)
+        toast({
+          title: "모델 동기화 완료",
+          description: `${result.count}개의 모델이 동기화되었습니다.`,
+        })
         router.refresh()
       }
     } catch (error) {
       console.error(error)
-      alert('동기화 실패')
+      toast({
+        title: "동기화 실패",
+        description: "모델 동기화 중 오류가 발생했습니다.",
+        variant: "destructive"
+      })
     } finally {
       setIsSyncing(false)
     }
@@ -415,7 +429,7 @@ export default function AdminModelsClient({ initialModels }: AdminModelsClientPr
           </Button>
           <Button onClick={handleSync} disabled={isSyncing}>
             <RefreshCw className={`mr-2 h-4 w-4 ${isSyncing ? 'animate-spin' : ''}`} />
-            모델 동기화
+            {isSyncing ? '동기화 중...' : '모델 동기화'}
           </Button>
         </div>
       </div>
@@ -612,6 +626,6 @@ export default function AdminModelsClient({ initialModels }: AdminModelsClientPr
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </div >
   )
 }
