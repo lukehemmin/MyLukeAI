@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Plus, MessageSquare, Menu, Settings, LogOut, User as UserIcon, PanelLeftClose, Shield, Trash2, Pin, Archive, PinOff, Inbox } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -248,32 +248,39 @@ export function Sidebar({
   // Sidebar Resizing Logic
   const [sidebarWidth, setSidebarWidth] = useState(260)
   const [isResizing, setIsResizing] = useState(false)
+  const sidebarWidthRef = useRef(sidebarWidth)
 
   useEffect(() => {
     const savedWidth = localStorage.getItem('sidebar-width')
     if (savedWidth) {
-      setSidebarWidth(parseInt(savedWidth, 10))
+      const width = parseInt(savedWidth, 10)
+      setSidebarWidth(width)
+      sidebarWidthRef.current = width
     }
   }, [])
+
+  useEffect(() => {
+    sidebarWidthRef.current = sidebarWidth
+  }, [sidebarWidth])
 
   const startResizing = (e: React.MouseEvent) => {
     e.preventDefault()
     setIsResizing(true)
   }
 
-  const stopResizing = () => {
+  const stopResizing = useCallback(() => {
     setIsResizing(false)
-    localStorage.setItem('sidebar-width', sidebarWidth.toString())
-  }
+    localStorage.setItem('sidebar-width', sidebarWidthRef.current.toString())
+  }, [])
 
-  const resize = (e: MouseEvent) => {
+  const resize = useCallback((e: MouseEvent) => {
     if (isResizing) {
       const newWidth = e.clientX
       if (newWidth >= 200 && newWidth <= 480) {
         setSidebarWidth(newWidth)
       }
     }
-  }
+  }, [isResizing])
 
   useEffect(() => {
     if (isResizing) {
@@ -287,7 +294,7 @@ export function Sidebar({
       window.removeEventListener('mousemove', resize)
       window.removeEventListener('mouseup', stopResizing)
     }
-  }, [isResizing, sidebarWidth])
+  }, [isResizing, resize, stopResizing])
 
   useEffect(() => {
     if (isArchivedOpen) {

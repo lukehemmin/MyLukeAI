@@ -220,6 +220,7 @@ model Model {
   provider    String   // 모델 제공자 (openai, anthropic, google 등)
   name        String   // 표기 이름 (관리자가 수정 가능)
   description String?  // 모델 설명
+  type        ModelType @default(TEXT) // 모델 타입 (TEXT, IMAGE, AUDIO 등)
   
   isEnabled   Boolean  @default(true)  // 사용 가능 여부
   isPublic    Boolean  @default(true)  // 일반 사용자에게 공개 여부
@@ -242,6 +243,13 @@ model Model {
   @@unique([provider, apiModelId, apiKeyId]) // 제공자와 모델ID, API Key 조합은 유일해야 함
   @@index([isEnabled, isPublic])
   @@index([order]) // 정렬을 위한 인덱스
+}
+
+enum ModelType {
+  TEXT
+  TEXT_VISION
+  IMAGE
+  AUDIO
 }
 
 // ============================================

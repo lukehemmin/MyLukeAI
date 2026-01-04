@@ -23,6 +23,7 @@ interface UpdateModelPayload {
   isEnabled?: boolean
   isPublic?: boolean
   supportsStreaming?: boolean
+  type?: 'TEXT' | 'TEXT_VISION' | 'IMAGE' | 'AUDIO'
 }
 
 // 모델 동기화 액션
@@ -52,18 +53,31 @@ export async function syncModels() {
         const openai = new OpenAI({ apiKey: decryptedKey })
         const list = await openai.models.list()
 
-        // 제외할 모델 키워드 (Blacklist)
-        const EXCLUDED_KEYWORDS = ['dall-e', 'tts', 'whisper', 'embedding', 'babbage', 'davinci', 'curie', 'ada', 'realtime', 'audio', 'image', 'moderation', 'sora', 'transcribe', 'computer-use']
+        // 제외할 모델 키워드 (Blacklist) - 이제 이미지/오디오 모델도 허용하므로 리스트 축소
+        // 여전히 제외할 것: 임베딩, 모더레이션, 위스퍼(STT는 챗용이 아님), 컴퓨터 사용 등
+        const EXCLUDED_KEYWORDS = ['embedding', 'babbage', 'davinci', 'curie', 'ada', 'moderation', 'whisper', 'transcribe', 'computer-use']
 
         // 3. DB에 업데이트 (Parallel Upsert)
         const upsertPromises = list.data
           .filter(model => {
-            // 채팅 불가능한 모델만 제외하고 모두 허용
+            // 채팅/생성 불가능한 모델만 제외하고 모두 허용
             const isExcluded = EXCLUDED_KEYWORDS.some(keyword => model.id.includes(keyword))
             return !isExcluded
           })
-          .map(model =>
-            prisma.model.upsert({
+          .map(model => {
+            let modelType: 'TEXT' | 'TEXT_VISION' | 'IMAGE' | 'AUDIO' = 'TEXT'
+
+            // 모델 타입 추론
+            if (model.id.includes('dall-e') || model.id.includes('image') || model.id.includes('sora')) {
+              modelType = 'IMAGE'
+            } else if (model.id.includes('tts') || model.id.includes('audio')) {
+              modelType = 'AUDIO'
+            } else if (model.id.includes('vision') || model.id.includes('gpt-4o')) {
+              // gpt-4o는 기본적으로 vision 지원
+              modelType = 'TEXT_VISION'
+            }
+
+            return prisma.model.upsert({
               where: {
                 provider_apiModelId_apiKeyId: {
                   provider: 'openai',
@@ -78,10 +92,11 @@ export async function syncModels() {
                 name: `${model.id} (${key.name})`, // 모델 이름에 키 이름 포함
                 isEnabled: true,
                 isPublic: false, // 기본적으로 비공개
-                apiKeyId: key.id
+                apiKeyId: key.id,
+                type: modelType
               }
             })
-          )
+          })
 
         await Promise.all(upsertPromises)
         syncedCount += upsertPromises.length

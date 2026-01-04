@@ -49,4 +49,5 @@ export interface ModelConfig {
   description?: string;
   enabled: boolean;
   isDefault?: boolean;
+  type?: 'TEXT' | 'TEXT_VISION' | 'IMAGE' | 'AUDIO';
 }

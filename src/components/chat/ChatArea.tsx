@@ -8,7 +8,7 @@ import { EmptyState } from './EmptyState'
 import { ErrorMessage } from './ErrorMessage'
 import { LoadingSkeleton } from './LoadingSkeleton'
 import { TypingIndicator } from './TypingIndicator'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useMemo } from 'react'
 import { useRouter, useParams } from 'next/navigation'
 import { ModelConfig } from '@/types/chat'
 
@@ -17,7 +17,13 @@ interface ChatAreaProps {
   models: ModelConfig[]
 }
 
-export function ChatArea({ conversationId: propConversationId, models }: ChatAreaProps) {
+export function ChatArea({ conversationId: propConversationId, models: allModels }: ChatAreaProps) {
+  // 텍스트/비전 모델만 채팅창에 표시
+  const models = useMemo(() =>
+    allModels.filter(m => !m.type || m.type === 'TEXT' || m.type === 'TEXT_VISION'),
+    [allModels]
+  )
+
   // URL 파라미터를 직접 읽어서 soft navigation에서도 올바르게 동작하도록 함
   const params = useParams()
   const conversationId = (params?.id as string) || propConversationId

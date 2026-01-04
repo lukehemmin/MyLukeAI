@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowDown, ArrowUp, Check, RefreshCw, RotateCcw, Search, Settings2, Trash2 } from 'lucide-react'
+import { ArrowDown, ArrowUp, Check, CheckCircle2, RefreshCw, RotateCcw, Search, Settings2, Trash2 } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
@@ -39,6 +39,7 @@ interface Model {
   apiKey?: {
     name: string
   } | null
+  type?: 'TEXT' | 'TEXT_VISION' | 'IMAGE' | 'AUDIO'
 }
 
 interface AdminModelsClientProps {
@@ -77,7 +78,8 @@ export default function AdminModelsClient({ initialModels }: AdminModelsClientPr
     name: '',
     isEnabled: false,
     isPublic: false,
-    supportsStreaming: false
+    supportsStreaming: false,
+    type: 'TEXT' as 'TEXT' | 'TEXT_VISION' | 'IMAGE' | 'AUDIO'
   })
 
   useEffect(() => {
@@ -127,7 +129,12 @@ export default function AdminModelsClient({ initialModels }: AdminModelsClientPr
       if (result.success) {
         toast({
           title: "모델 동기화 완료",
-          description: `${result.count}개의 모델이 동기화되었습니다.`,
+          description: (
+            <div className="flex items-center gap-2">
+              <CheckCircle2 className="h-4 w-4 text-green-500" />
+              <span>{result.count}개의 모델이 동기화되었습니다.</span>
+            </div>
+          ),
         })
         router.refresh()
       }
@@ -151,11 +158,20 @@ export default function AdminModelsClient({ initialModels }: AdminModelsClientPr
       await resetAllModels()
       setModels([])
       setSelectedIds(new Set())
-      alert('모든 모델이 삭제되었습니다.')
+      setModels([])
+      setSelectedIds(new Set())
+      toast({
+        description: (
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-green-500" />
+            <span>모든 모델이 삭제되었습니다.</span>
+          </div>
+        )
+      })
       router.refresh()
     } catch (error) {
       console.error(error)
-      alert('초기화 실패')
+      toast({ variant: 'destructive', description: "초기화 실패" })
     } finally {
       setIsResetting(false)
     }
@@ -187,7 +203,8 @@ export default function AdminModelsClient({ initialModels }: AdminModelsClientPr
       name: model.name,
       isEnabled: model.isEnabled,
       isPublic: model.isPublic,
-      supportsStreaming: model.supportsStreaming
+      supportsStreaming: model.supportsStreaming,
+      type: (model.type as any) || 'TEXT'
     })
   }
 
@@ -199,7 +216,7 @@ export default function AdminModelsClient({ initialModels }: AdminModelsClientPr
     if (!selectedModel) return
     const trimmedName = modalState.name.trim()
     if (!trimmedName) {
-      alert('표시 이름을 입력해주세요.')
+      toast({ variant: 'destructive', description: "표시 이름을 입력해주세요." })
       return
     }
 
@@ -209,16 +226,25 @@ export default function AdminModelsClient({ initialModels }: AdminModelsClientPr
         name: trimmedName,
         isEnabled: modalState.isEnabled,
         isPublic: modalState.isPublic,
-        supportsStreaming: modalState.supportsStreaming
+        supportsStreaming: modalState.supportsStreaming,
+        type: modalState.type
       }
       await updateModel(selectedModel.id, payload)
       setModels(prev => prev.map(model => model.id === selectedModel.id ? { ...model, ...payload } : model))
       setSelectedModel(prev => prev ? { ...prev, ...payload, name: trimmedName } : prev)
-      alert('모델이 저장되었습니다.')
+      setSelectedModel(prev => prev ? { ...prev, ...payload, name: trimmedName } : prev)
+      toast({
+        description: (
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-green-500" />
+            <span>모델이 저장되었습니다.</span>
+          </div>
+        )
+      })
       closeModelModal()
     } catch (error) {
       console.error(error)
-      alert('모델 저장에 실패했습니다.')
+      toast({ variant: 'destructive', description: "모델 저장에 실패했습니다." })
     } finally {
       setIsSaving(false)
     }
@@ -237,11 +263,18 @@ export default function AdminModelsClient({ initialModels }: AdminModelsClientPr
         next.delete(selectedModel.id)
         return next
       })
-      alert('모델이 삭제되었습니다.')
+      toast({
+        description: (
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-green-500" />
+            <span>모델이 삭제되었습니다.</span>
+          </div>
+        )
+      })
       closeModelModal()
     } catch (error) {
       console.error(error)
-      alert('삭제 실패')
+      toast({ variant: 'destructive', description: "삭제 실패" })
     } finally {
       setIsSaving(false)
     }
@@ -257,10 +290,19 @@ export default function AdminModelsClient({ initialModels }: AdminModelsClientPr
       await bulkDeleteModels(ids)
       setModels(prev => prev.filter(model => !selectedIds.has(model.id)))
       setSelectedIds(new Set())
-      alert('선택한 모델이 삭제되었습니다.')
+      setModels(prev => prev.filter(model => !selectedIds.has(model.id)))
+      setSelectedIds(new Set())
+      toast({
+        description: (
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-green-500" />
+            <span>선택한 모델이 삭제되었습니다.</span>
+          </div>
+        )
+      })
     } catch (error) {
       console.error(error)
-      alert('선택 삭제 실패')
+      toast({ variant: 'destructive', description: "선택 삭제 실패" })
     } finally {
       setIsBulkDeleting(false)
     }
@@ -310,12 +352,19 @@ export default function AdminModelsClient({ initialModels }: AdminModelsClientPr
         return next.sort((a, b) => a.order - b.order)
       })
 
-      alert('설정이 저장되었습니다.')
+      toast({
+        description: (
+          <div className="flex items-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-green-500" />
+            <span>설정이 저장되었습니다.</span>
+          </div>
+        )
+      })
       setIsOrderDialogOpen(false)
       router.refresh()
     } catch (error) {
       console.error(error)
-      alert('설정 저장 실패')
+      toast({ variant: 'destructive', description: "설정 저장 실패" })
     } finally {
       setIsSaving(false)
     }
@@ -491,6 +540,7 @@ export default function AdminModelsClient({ initialModels }: AdminModelsClientPr
                       <TableHead>API 키 이름</TableHead>
                       <TableHead>모델 ID (API)</TableHead>
                       <TableHead>표시 이름</TableHead>
+                      <TableHead>타입</TableHead>
                       <TableHead>상태</TableHead>
                       <TableHead>공개</TableHead>
                       <TableHead className="w-[80px]">기본</TableHead>
@@ -520,6 +570,11 @@ export default function AdminModelsClient({ initialModels }: AdminModelsClientPr
                         </TableCell>
                         <TableCell className="font-mono text-xs">{model.apiModelId}</TableCell>
                         <TableCell className="font-medium">{model.name}</TableCell>
+                        <TableCell>
+                          <Badge variant="secondary" className="text-xs">
+                            {model.type || 'TEXT'}
+                          </Badge>
+                        </TableCell>
                         <TableCell>
                           <Badge variant={model.isEnabled ? 'default' : 'outline'}>
                             {model.isEnabled ? '사용 가능' : '비활성화'}
@@ -601,6 +656,26 @@ export default function AdminModelsClient({ initialModels }: AdminModelsClientPr
                   checked={modalState.supportsStreaming}
                   onCheckedChange={(checked) => setModalState({ ...modalState, supportsStreaming: !!checked })}
                 />
+              </div>
+              <div className="flex items-center justify-between rounded-md border p-3">
+                <div>
+                  <p className="font-medium">모델 타입</p>
+                  <p className="text-sm text-muted-foreground">모델의 용도를 지정합니다 (채팅 필터링 등에 사용).</p>
+                </div>
+                <Select
+                  value={modalState.type}
+                  onValueChange={(val) => setModalState({ ...modalState, type: val as any })}
+                >
+                  <SelectTrigger className="w-[180px]">
+                    <SelectValue placeholder="타입 선택" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="TEXT">텍스트 (TEXT)</SelectItem>
+                    <SelectItem value="TEXT_VISION">텍스트+비전 (TEXT_VISION)</SelectItem>
+                    <SelectItem value="IMAGE">이미지 생성 (IMAGE)</SelectItem>
+                    <SelectItem value="AUDIO">오디오 (AUDIO)</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           )}
