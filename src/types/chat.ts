@@ -12,10 +12,18 @@ export interface MessageContext {
   urls?: string[];
 }
 
+export interface MessageContentPart {
+  type: 'text' | 'image_url';
+  text?: string;
+  image_url?: {
+    url: string;
+  };
+}
+
 export interface Message {
   id: string;
   role: 'user' | 'assistant' | 'system';
-  content: string;
+  content: string | MessageContentPart[];
   reasoning?: string;
   tokens?: number;
   history?: MessageHistory[];

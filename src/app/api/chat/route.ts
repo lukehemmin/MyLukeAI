@@ -43,8 +43,10 @@ export const POST = withAuth(async (req: Request, userId: string) => {
     // 제공자 확인
     const provider = modelConfig.provider
 
-    // 스트리밍 지원 여부 (DB 모델은 필드 사용, static은 기본 false)
-    const supportsStreaming = modelConfig.supportsStreaming ?? false
+    // 스트리밍 지원 여부 (DB 모델은 필드 사용, TEXT/TEXT_VISION은 기본 true)
+    const modelType = modelConfig.type ?? 'TEXT'
+    const supportsStreaming = modelConfig.supportsStreaming ??
+      (modelType === 'TEXT' || modelType === 'TEXT_VISION')
 
     // API 키 가져오기
     let apiKeyId: string | null = null
@@ -86,16 +88,45 @@ export const POST = withAuth(async (req: Request, userId: string) => {
 
     // Save user message to database
     if (conversationId) {
+      const lastMessage = messages[messages.length - 1];
+      let contentToSave = '';
+
+      if (typeof lastMessage.content === 'string') {
+        contentToSave = lastMessage.content;
+      } else if (Array.isArray(lastMessage.content)) {
+        // 멀티모달 메시지(이미지 등)는 JSON 문자열로 저장
+        contentToSave = JSON.stringify(lastMessage.content);
+      }
+
       await prisma.message.create({
         data: {
           conversationId,
           role: 'user',
-          content: messages[messages.length - 1].content,
+          content: contentToSave,
         }
       })
     }
 
     const startTime = Date.now()
+
+    // Convert OpenAI 'image_url' format to Vercel AI SDK 'image' format
+    const formattedMessages = messages.map((m: any) => {
+      if (Array.isArray(m.content)) {
+        return {
+          ...m,
+          content: m.content.map((c: any) => {
+            if (c.type === 'image_url') {
+              return {
+                type: 'image',
+                image: c.image_url.url
+              }
+            }
+            return c
+          })
+        }
+      }
+      return m
+    })
 
     const openaiProvider = createOpenAI({
       apiKey: activeKeyApiKey!,
@@ -108,7 +139,7 @@ export const POST = withAuth(async (req: Request, userId: string) => {
 
       const result = await streamText({
         model: openaiProvider(apiModelId),
-        messages,
+        messages: formattedMessages,
         abortSignal: req.signal,
         onFinish: async ({ usage }) => {
           const responseTime = Date.now() - startTime
@@ -137,7 +168,10 @@ export const POST = withAuth(async (req: Request, userId: string) => {
             if (promptTokens === 0 && completionTokens === 0) {
               console.warn('[TokenUsage] Usage data missing, calculating manually...')
               // Calculate prompt tokens from messages
-              const promptText = messages.map((m: any) => m.content).join('\n')
+              const promptText = messages.map((m: any) => {
+                if (typeof m.content === 'string') return m.content
+                return m.content.filter((p: any) => p.type === 'text').map((p: any) => p.text).join('\n')
+              }).join('\n')
               promptTokens = countTokens(promptText)
               // Calculate completion tokens from accumulated content
               completionTokens = countTokens(assistantContent)
@@ -187,7 +221,7 @@ export const POST = withAuth(async (req: Request, userId: string) => {
     // 비스트리밍 모드 (전체 응답 완료 후 전송)
     const result = await generateText({
       model: openaiProvider(apiModelId),
-      messages,
+      messages: formattedMessages,
       abortSignal: req.signal,
     })
 
@@ -219,7 +253,10 @@ export const POST = withAuth(async (req: Request, userId: string) => {
       if (promptTokens === 0 && completionTokens === 0) {
         console.warn('[TokenUsage] Usage data missing (non-stream), calculating manually...')
         // Calculate prompt tokens from messages
-        const promptText = messages.map((m: any) => m.content).join('\n')
+        const promptText = messages.map((m: any) => {
+          if (typeof m.content === 'string') return m.content
+          return m.content.filter((p: any) => p.type === 'text').map((p: any) => p.text).join('\n')
+        }).join('\n')
         promptTokens = countTokens(promptText)
         completionTokens = countTokens(assistantContent)
       }

@@ -77,6 +77,9 @@ export async function syncModels() {
               modelType = 'TEXT_VISION'
             }
 
+            // TEXT/TEXT_VISION 모델은 스트리밍 지원
+            const supportsStreaming = modelType === 'TEXT' || modelType === 'TEXT_VISION'
+
             return prisma.model.upsert({
               where: {
                 provider_apiModelId_apiKeyId: {
@@ -93,7 +96,8 @@ export async function syncModels() {
                 isEnabled: true,
                 isPublic: false, // 기본적으로 비공개
                 apiKeyId: key.id,
-                type: modelType
+                type: modelType,
+                supportsStreaming
               }
             })
           })
