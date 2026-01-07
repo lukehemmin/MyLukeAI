@@ -6,6 +6,7 @@ import { Sidebar } from './Sidebar'
 import { useEffect } from 'react'
 import { useUIStore } from '@/stores/uiStore'
 import { useIsMobile } from '@/hooks/useMediaQuery'
+import { ModelConfig } from '@/types/chat'
 
 interface ConversationItem {
   id: string
@@ -27,13 +28,17 @@ interface MainLayoutClientProps {
     image?: string | null
     role?: string
   }
+  models?: ModelConfig[]
+  userDefaultModelId?: string | null
 }
 
 export function MainLayoutClient({
   children,
   conversations,
   currentConversationId: propConversationId,
-  user
+  user,
+  models,
+  userDefaultModelId
 }: MainLayoutClientProps) {
   const router = useRouter()
   const params = useParams()
@@ -65,6 +70,8 @@ export function MainLayoutClient({
         onNewConversation={handleNewConversation}
         onSelectConversation={handleSelectConversation}
         user={user}
+        models={models}
+        userDefaultModelId={userDefaultModelId}
       />
       <main className="flex-1 overflow-hidden">
         {children}

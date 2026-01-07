@@ -15,6 +15,8 @@ interface ChatHeaderProps {
   isStreaming?: boolean
   onStopStreaming?: () => void
   models: ModelConfig[]
+  userDefaultModelId?: string | null
+  onSetDefaultModel: (modelId: string) => void
 }
 
 export function ChatHeader({
@@ -23,7 +25,9 @@ export function ChatHeader({
   totalTokens,
   isStreaming,
   onStopStreaming,
-  models
+  models,
+  userDefaultModelId,
+  onSetDefaultModel
 }: ChatHeaderProps) {
   const currentModelConfig = models.find(m => m.id === currentModel)
   const { sidebarOpen, toggleSidebar } = useUIStore()
@@ -46,6 +50,8 @@ export function ChatHeader({
             value={currentModel}
             onChange={onModelChange}
             models={models}
+            userDefaultModelId={userDefaultModelId}
+            onSetDefaultModel={onSetDefaultModel}
           />
         </div>
       </div>

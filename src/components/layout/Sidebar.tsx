@@ -44,6 +44,7 @@ import { CSS } from '@dnd-kit/utilities'
 import { useToast } from '@/components/ui/use-toast'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { ModelConfig } from '@/types/chat'
 
 interface Conversation {
   id: string
@@ -66,6 +67,8 @@ interface SidebarProps {
     image?: string | null
     role?: string
   }
+  models?: ModelConfig[]
+  userDefaultModelId?: string | null
 }
 
 // Sortable Item Component
@@ -210,7 +213,9 @@ export function Sidebar({
   currentConversationId,
   onNewConversation,
   onSelectConversation,
-  user
+  user,
+  models,
+  userDefaultModelId
 }: SidebarProps) {
   const { sidebarOpen, toggleSidebar } = useUIStore()
   const isMobile = useIsMobile()
@@ -542,7 +547,12 @@ export function Sidebar({
         </Button>
       )}
 
-      <SettingsModal open={isSettingsOpen} onOpenChange={setIsSettingsOpen} />
+      <SettingsModal
+        open={isSettingsOpen}
+        onOpenChange={setIsSettingsOpen}
+        models={models}
+        userDefaultModelId={userDefaultModelId}
+      />
 
       {/* Archived Chats Dialog */}
       <Dialog open={isArchivedOpen} onOpenChange={setIsArchivedOpen}>

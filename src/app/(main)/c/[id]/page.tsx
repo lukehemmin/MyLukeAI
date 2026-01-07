@@ -7,9 +7,9 @@ import { getEnabledModels } from '@/lib/data/models'
 async function getConversation(id: string, userId: string) {
   try {
     const conversation = await prisma.conversation.findFirst({
-      where: { 
+      where: {
         id,
-        userId 
+        userId
       },
       include: {
         messages: {
@@ -17,7 +17,7 @@ async function getConversation(id: string, userId: string) {
         }
       }
     })
-    
+
     return conversation
   } catch (error) {
     console.error('Error fetching conversation:', error)
@@ -25,27 +25,36 @@ async function getConversation(id: string, userId: string) {
   }
 }
 
-export default async function ConversationPage({ 
-  params 
-}: { 
-  params: { id: string } 
+export default async function ConversationPage({
+  params
+}: {
+  params: { id: string }
 }) {
   const session = await auth()
-  
+
   if (!session?.user?.id) {
     redirect('/login')
   }
 
   const conversation = await getConversation(params.id, session.user.id)
   const models = await getEnabledModels()
-  
+
+  let userDefaultModelId: string | null = null
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { preferences: true }
+  })
+  if (user?.preferences && typeof user.preferences === 'object') {
+    userDefaultModelId = (user.preferences as any).defaultModelId || null
+  }
+
   if (!conversation) {
     return <div className="flex items-center justify-center h-full">대화를 찾을 수 없습니다</div>
   }
 
   return (
     <div className="h-full">
-      <ChatArea conversationId={conversation.id} models={models} />
+      <ChatArea conversationId={conversation.id} models={models} userDefaultModelId={userDefaultModelId} />
     </div>
   )
 }

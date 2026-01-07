@@ -17,25 +17,29 @@ import { Input } from '@/components/ui/input'
 import { useTheme } from 'next-themes'
 import { useSession } from 'next-auth/react'
 import { updatePreferences, deleteAllConversations } from '@/lib/actions/user'
+import { setUserDefaultModel } from '@/lib/actions/user-settings'
 import { generateTwoFactorSecret, enableTwoFactor, disableTwoFactor, getTwoFactorStatus } from '@/lib/actions/two-factor'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Loader2, ShieldCheck, ShieldAlert, Copy, Check } from 'lucide-react'
 import Image from 'next/image'
+import { ModelConfig } from '@/types/chat'
 
 interface SettingsModalProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   defaultTab?: string
+  models?: ModelConfig[]
+  userDefaultModelId?: string | null
 }
 
-export function SettingsModal({ open, onOpenChange, defaultTab = "general" }: SettingsModalProps) {
+export function SettingsModal({ open, onOpenChange, defaultTab = "general", models = [], userDefaultModelId }: SettingsModalProps) {
   const { theme, setTheme } = useTheme()
   const { data: session, update: updateSession } = useSession()
   const router = useRouter()
   const searchParams = useSearchParams()
   const [activeTab, setActiveTab] = useState(defaultTab)
   const [isDeleting, setIsDeleting] = useState(false)
-  
+
   // 2FA State
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false)
   const [setupStep, setSetupStep] = useState<'init' | 'qr' | 'verify'>('init')
@@ -48,13 +52,13 @@ export function SettingsModal({ open, onOpenChange, defaultTab = "general" }: Se
   const twoFactorSectionRef = useRef<HTMLDivElement>(null)
 
   // @ts-ignore
-  const defaultModel = session?.user?.preferences?.defaultModel || 'gpt-4o-mini'
+  const defaultModel = userDefaultModelId || session?.user?.preferences?.defaultModelId || 'gpt-4o-mini'
 
   useEffect(() => {
     if (open) {
       // 2FA 상태 확인
       checkTwoFactorStatus()
-      
+
       // URL 파라미터에 따른 탭 설정
       if (searchParams.get('settings') === 'account') {
         setActiveTab('account')
@@ -79,8 +83,15 @@ export function SettingsModal({ open, onOpenChange, defaultTab = "general" }: Se
 
   const handleModelChange = async (value: string) => {
     try {
-      await updatePreferences({ defaultModel: value })
+      await setUserDefaultModel(value)
+      // We rely on router.refresh() to update props from server
+      await updatePreferences({ defaultModelId: value }) // Keep compatible with generic if needed? user-settings action already updates DB.
+      // Actually user-settings.ts updates `preferences.defaultModelId`.
+      // The session might need update if we used session to display it, but we use prop now.
+
       router.refresh()
+      // Force update session if we want immediate feedback in client components relying on session
+      await updateSession()
     } catch (error) {
       console.error('Failed to update preferences:', error)
     }
@@ -175,7 +186,7 @@ export function SettingsModal({ open, onOpenChange, defaultTab = "general" }: Se
             <TabsTrigger value="general">일반</TabsTrigger>
             <TabsTrigger value="account">계정</TabsTrigger>
           </TabsList>
-          
+
           <TabsContent value="general" className="space-y-4 mt-4">
             <Card>
               <CardHeader>
@@ -212,13 +223,25 @@ export function SettingsModal({ open, onOpenChange, defaultTab = "general" }: Se
                 <div className="flex items-center justify-between">
                   <Label htmlFor="model">기본 모델</Label>
                   <Select value={defaultModel} onValueChange={handleModelChange}>
-                    <SelectTrigger className="w-[180px]" id="model">
+                    <SelectTrigger className="w-[200px]" id="model">
                       <SelectValue placeholder="모델 선택" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="gpt-4o-mini">GPT-4o Mini</SelectItem>
-                      <SelectItem value="gpt-4o">GPT-4o</SelectItem>
-                      <SelectItem value="claude-3-5-sonnet">Claude 3.5 Sonnet</SelectItem>
+                      {models.length > 0 ? (
+                        models
+                          .filter(m => !m.type || m.type === 'TEXT' || m.type === 'TEXT_VISION')
+                          .map(model => (
+                            <SelectItem key={model.id} value={model.id}>
+                              {model.name}
+                            </SelectItem>
+                          ))
+                      ) : (
+                        <>
+                          <SelectItem value="gpt-4o-mini">GPT-4o Mini</SelectItem>
+                          <SelectItem value="gpt-4o">GPT-4o</SelectItem>
+                          <SelectItem value="claude-3-5-sonnet">Claude 3.5 Sonnet</SelectItem>
+                        </>
+                      )}
                     </SelectContent>
                   </Select>
                 </div>
@@ -341,9 +364,9 @@ export function SettingsModal({ open, onOpenChange, defaultTab = "general" }: Se
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <Button 
-                  variant="destructive" 
-                  onClick={handleDeleteAll} 
+                <Button
+                  variant="destructive"
+                  onClick={handleDeleteAll}
                   disabled={isDeleting}
                   className="w-full sm:w-auto"
                 >
