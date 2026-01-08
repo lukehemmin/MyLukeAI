@@ -132,10 +132,43 @@ export const POST = withAuth(async (req: Request, userId: string) => {
       apiKey: activeKeyApiKey!,
       baseURL: activeKeyBaseUrl || undefined
     })
-
-    // 스트리밍 모드
+    /**
+     * [견고한 스트리밍 아키텍처 - v1.5]
+     * 
+     * ⚠️ 중요: 이 로직은 새로고침/페이지 이동 시에도 스트리밍 응답을 보존하기 위한 핵심 코드입니다!
+     * 
+     * 기존 문제:
+     * - 스트리밍 완료 후에만 DB에 저장되어, 중간에 새로고침하면 응답이 영구 손실됨
+     * - 새 채팅 생성 후 router.push() 시 클라이언트 상태와 DB가 동기화되지 않음
+     * 
+     * 해결 방법:
+     * 1. 스트리밍 시작 전에 빈 메시지를 DB에 미리 생성 (isStreaming: true)
+     * 2. 클라이언트가 언제든 DB에서 현재 진행 상태를 조회 가능
+     * 3. 스트리밍 완료 시 메시지 업데이트 (isStreaming: false)
+     * 
+     * 🚫 이 로직을 수정할 때 주의사항:
+     * - prisma.message.create가 streamText보다 먼저 호출되어야 함
+     * - assistantMessageId가 onFinish에서 사용되므로 클로저에 캡처됨
+     * - isStreaming 필드는 프론트엔드 polling 로직과 연동됨
+     */
     if (supportsStreaming) {
       let assistantContent = ''
+      let assistantMessageId: string | null = null
+
+      // [Step 1] 스트리밍 시작 전 빈 assistant 메시지 미리 생성
+      // - 새로고침 시 프론트엔드가 DB에서 이 메시지를 조회하여 복구 가능
+      // - isStreaming: true로 설정하여 "아직 응답 중"임을 표시
+      if (conversationId) {
+        const assistantMessage = await prisma.message.create({
+          data: {
+            conversationId,
+            role: 'assistant',
+            content: '',
+            isStreaming: true,
+          }
+        })
+        assistantMessageId = assistantMessage.id
+      }
 
       const result = await streamText({
         model: openaiProvider(apiModelId),
@@ -144,13 +177,15 @@ export const POST = withAuth(async (req: Request, userId: string) => {
         onFinish: async ({ usage }) => {
           const responseTime = Date.now() - startTime
 
-          // Save assistant message to database with complete content
-          if (conversationId) {
-            await prisma.message.create({
+          // [Step 3] 스트리밍 완료: 메시지 업데이트 (CREATE → UPDATE 패턴)
+          // - isStreaming: false로 변경하여 완료 표시
+          // - 프론트엔드 polling이 이를 감지하고 polling 중지
+          if (assistantMessageId) {
+            await prisma.message.update({
+              where: { id: assistantMessageId },
               data: {
-                conversationId,
-                role: 'assistant',
                 content: assistantContent,
+                isStreaming: false,
                 tokens: usage?.totalTokens,
               }
             })

@@ -107,8 +107,24 @@ export const useChatStore = create<ChatState>((set, get) => ({
       }
     }
 
-    // 3. Send Message (Background / Fire-and-Forget)
-    // We do NOT await this. We return the ID immediately so navigation happens now.
+    /**
+     * [메시지 전송 - Fire-and-Forget 패턴]
+     * 
+     * ⚠️ 중요: 이 fetch는 의도적으로 await하지 않습니다!
+     * 
+     * 이유:
+     * 1. UX 최적화: 대화방 생성 즉시 해당 페이지로 이동하여 사용자가 기다리지 않게 함
+     * 2. 스트리밍 응답이 백그라운드에서 처리되면서 실시간으로 UI에 표시됨
+     * 3. 응답을 기다리면 긴 AI 응답 시간 동안 사용자가 빈 화면을 보게 됨
+     * 
+     * 🚫 이 fetch에 await를 추가하면:
+     * - 페이지 이동이 AI 응답이 완료될 때까지 지연됨
+     * - 사용자가 "안녕"을 입력하고 5-10초 동안 아무 변화 없이 기다려야 함
+     * - 스트리밍의 의미가 사라짐
+     * 
+     * 이 코드는 수정하지 않아도 됩니다. 현재 패턴이 최적의 UX를 제공합니다.
+     * 스트리밍 응답이 보이지 않는 문제는 ChatArea.tsx의 useEffect에서 해결합니다.
+     */
     fetch('/api/chat', {
       method: 'POST',
       headers: {

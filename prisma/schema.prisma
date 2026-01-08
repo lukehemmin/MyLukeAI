@@ -114,6 +114,9 @@ model Message {
   content        String   @db.Text
   tokens         Int?
   
+  // 스트리밍 상태 추적 (v1.5 추가)
+  isStreaming    Boolean  @default(false)
+  
   // v1.2 추가: 버전 관리를 위한 히스토리 (별도 테이블 대체)
   // 형식: [{ content: string, createdAt: string }, ...]
   history        Json     @default("[]")
