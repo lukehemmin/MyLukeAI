@@ -324,39 +324,35 @@ export function Sidebar({
       const isPinned = pinnedConversations.some(c => c.id === active.id)
 
       if (isPinned) {
-        setPinnedConversations((items) => {
-          const oldIndex = items.findIndex((item) => item.id === active.id)
-          const newIndex = items.findIndex((item) => item.id === over?.id)
+        const oldIndex = pinnedConversations.findIndex((item) => item.id === active.id)
+        const newIndex = pinnedConversations.findIndex((item) => item.id === over?.id)
 
-          if (oldIndex === -1 || newIndex === -1) return items // Dragged between lists (not supported yet)
+        if (oldIndex !== -1 && newIndex !== -1) {
+          const newItems = arrayMove(pinnedConversations, oldIndex, newIndex)
+          setPinnedConversations(newItems)
 
-          const newItems = arrayMove(items, oldIndex, newIndex)
-
+          // 서버 액션 호출은 setState 이후에 수행
           const updates = newItems.map((item, index) => ({
             id: item.id,
             orderIndex: index
           }))
-
           reorderConversations(updates).catch(err => console.error("Failed to reorder pinned", err))
-          return newItems
-        })
+        }
       } else {
-        setRecentConversations((items) => {
-          const oldIndex = items.findIndex((item) => item.id === active.id)
-          const newIndex = items.findIndex((item) => item.id === over?.id)
+        const oldIndex = recentConversations.findIndex((item) => item.id === active.id)
+        const newIndex = recentConversations.findIndex((item) => item.id === over?.id)
 
-          if (oldIndex === -1 || newIndex === -1) return items
+        if (oldIndex !== -1 && newIndex !== -1) {
+          const newItems = arrayMove(recentConversations, oldIndex, newIndex)
+          setRecentConversations(newItems)
 
-          const newItems = arrayMove(items, oldIndex, newIndex)
-
+          // 서버 액션 호출은 setState 이후에 수행
           const updates = newItems.map((item, index) => ({
             id: item.id,
             orderIndex: index
           }))
-
           reorderConversations(updates).catch(err => console.error("Failed to reorder recent", err))
-          return newItems
-        })
+        }
       }
     }
     setActiveDragId(null)

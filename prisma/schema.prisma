@@ -117,7 +117,10 @@ model Message {
   // 스트리밍 상태 추적 (v1.5 추가)
   isStreaming    Boolean  @default(false)
   
-  // v1.2 추가: 버전 관리를 위한 히스토리 (별도 테이블 대체)
+  // v2.0 추가: 트리 구조를 위한 부모 메시지 참조
+  parentMessageId String?
+  
+  // v1.2 추가: 버전 관리를 위한 히스토리 (deprecated, 마이그레이션 후 제거 예정)
   // 형식: [{ content: string, createdAt: string }, ...]
   history        Json     @default("[]")
   
@@ -128,9 +131,14 @@ model Message {
   createdAt      DateTime @default(now())
   deletedAt      DateTime? // Soft Delete support
 
-  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  
+  // Self-relation for tree structure
+  parentMessage  Message?  @relation("MessageTree", fields: [parentMessageId], references: [id], onDelete: SetNull)
+  childMessages  Message[] @relation("MessageTree")
 
   @@index([conversationId])
+  @@index([parentMessageId])
 }
 
 model TokenUsage {

@@ -39,7 +39,7 @@ export default async function RootLayout({
 
   return (
     <html lang="ko" suppressHydrationWarning>
-      <body className={inter.className}>
+      <body className={inter.className} suppressHydrationWarning>
         <SessionProvider session={session}>
           <ThemeProvider defaultTheme="system">
             {children}

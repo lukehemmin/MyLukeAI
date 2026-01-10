@@ -3,7 +3,8 @@ import { Message, ChatError } from '@/types/chat'
 // Avoid importing Prisma types in client code
 
 interface ChatState {
-  messages: Message[]
+  messages: Message[]  // 모든 메시지 (트리 전체)
+  selectedPaths: Record<string, string>  // { parentMessageId: selectedChildId }
   isStreaming: boolean
   error: ChatError | null
   abortController: AbortController | null
@@ -14,8 +15,9 @@ interface ChatState {
     completionTokens: number
     totalTokens: number
   }
+  editingMessageId: string | null
+  editingContent: string
 
-  // Actions
   // Actions
   sendMessage: (content: string, conversationId: string | null, images?: string[]) => Promise<string | null>
   stopStreaming: () => void
@@ -25,10 +27,20 @@ interface ChatState {
   setCurrentConversation: (id: string | null) => void
   setCurrentModel: (model: string) => void
   updateTokenUsage: (usage: { promptTokens: number; completionTokens: number; totalTokens: number }) => void
+
+  // 메시지 수정/브랜치 관련 (트리 구조)
+  editMessage: (messageId: string, newContent: string) => Promise<void>
+  selectBranch: (parentMessageId: string | null, childId: string) => void  // 브랜치 선택
+  setEditingMessage: (messageId: string | null, content?: string) => void
+
+  // 트리 유틸리티
+  buildMessageChain: () => Message[]  // 현재 선택된 경로의 메시지들
+  getSiblings: (messageId: string) => { siblings: Message[], currentIndex: number }
 }
 
 export const useChatStore = create<ChatState>((set, get) => ({
   messages: [],
+  selectedPaths: {},  // { parentMessageId: selectedChildId }
   isStreaming: false,
   error: null,
   abortController: null,
@@ -39,6 +51,8 @@ export const useChatStore = create<ChatState>((set, get) => ({
     completionTokens: 0,
     totalTokens: 0,
   },
+  editingMessageId: null,
+  editingContent: '',
 
   sendMessage: async (content: string, conversationId: string | null, images?: string[]) => {
     const { isStreaming } = get()
@@ -51,10 +65,16 @@ export const useChatStore = create<ChatState>((set, get) => ({
       ]
       : content
 
+    // 트리 구조: 부모 메시지 ID 계산 (현재 경로의 마지막 메시지)
+    const chain = get().buildMessageChain()
+    const lastMessageInChain = chain.length > 0 ? chain[chain.length - 1] : null
+    const parentMessageId = lastMessageInChain?.id || null
+
     const userMessage: Message = {
       id: crypto.randomUUID(),
       role: 'user',
       content: messageContent,
+      parentMessageId,
       createdAt: new Date(),
     }
 
@@ -62,6 +82,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
       id: crypto.randomUUID(),
       role: 'assistant',
       content: '',
+      parentMessageId: userMessage.id,  // user 메시지를 부모로
       createdAt: new Date(),
     }
 
@@ -134,11 +155,41 @@ export const useChatStore = create<ChatState>((set, get) => ({
         messages: [...get().messages.filter(m => m.id !== userMessage.id && m.id !== assistantMessage.id && (m.role !== 'assistant' || m.content)), userMessage],
         conversationId: activeConversationId,
         model: get().currentModel,
+        parentMessageId,  // 트리 구조를 위한 부모 메시지 ID
       }),
       signal: abortController.signal,
     }).then(async (response) => {
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      // DB에서 생성된 실제 메시지 ID로 클라이언트 상태 동기화
+      const dbUserMessageId = response.headers.get('X-User-Message-Id')
+      if (dbUserMessageId) {
+        set((state) => {
+          const newSelectedPaths = { ...state.selectedPaths }
+
+          // Update selectedPaths where userMessage was the selected child
+          const parentKey = userMessage.parentMessageId ?? 'root'
+          if (newSelectedPaths[parentKey] === userMessage.id) {
+            newSelectedPaths[parentKey] = dbUserMessageId
+          }
+
+          // Update selectedPaths where userMessage was the parent key
+          if (newSelectedPaths[userMessage.id]) {
+            newSelectedPaths[dbUserMessageId] = newSelectedPaths[userMessage.id]
+            delete newSelectedPaths[userMessage.id]
+          }
+
+          return {
+            messages: state.messages.map((msg) => {
+              if (msg.id === userMessage.id) return { ...msg, id: dbUserMessageId }
+              if (msg.parentMessageId === userMessage.id) return { ...msg, parentMessageId: dbUserMessageId }
+              return msg
+            }),
+            selectedPaths: newSelectedPaths
+          }
+        })
       }
 
       const contentType = response.headers.get('Content-Type') || ''
@@ -255,12 +306,13 @@ export const useChatStore = create<ChatState>((set, get) => ({
         role: msg.role as 'user' | 'assistant' | 'system',
         content: content,
         tokens: msg.tokens || undefined,
+        parentMessageId: msg.parentMessageId || null,  // 트리 구조용
         history: msg.history as any || undefined,
         context: msg.context as any || undefined,
         createdAt: new Date(msg.createdAt),
       };
     })
-    set({ messages: convertedMessages })
+    set({ messages: convertedMessages, selectedPaths: {} })  // 경로 초기화
   },
 
   setCurrentConversation: (id) => set({ currentConversationId: id }),
@@ -268,4 +320,199 @@ export const useChatStore = create<ChatState>((set, get) => ({
   setCurrentModel: (model) => set({ currentModel: model }),
 
   updateTokenUsage: (usage) => set({ tokenUsage: usage }),
+
+  setEditingMessage: (messageId, content = '') => {
+    set({ editingMessageId: messageId, editingContent: content })
+  },
+
+  // 브랜치 선택 (분기점에서 경로 변경)
+  selectBranch: (parentMessageId, childId) => {
+    set((state) => ({
+      selectedPaths: {
+        ...state.selectedPaths,
+        [parentMessageId ?? 'root']: childId
+      }
+    }))
+  },
+
+  // 현재 선택된 경로에 따른 메시지 체인 빌드
+  buildMessageChain: () => {
+    const { messages, selectedPaths } = get()
+    const chain: Message[] = []
+
+    // 루트 메시지 찾기 (parentMessageId가 null인 메시지들)
+    const rootMessages = messages.filter(m => !m.parentMessageId)
+    if (rootMessages.length === 0) return chain
+
+    // 선택된 루트 또는 첫 번째 루트
+    let current = selectedPaths['root']
+      ? messages.find(m => m.id === selectedPaths['root'])
+      : rootMessages[0]
+
+    while (current) {
+      chain.push(current)
+
+      // 현재 메시지의 자식들 찾기
+      const children = messages.filter(m => m.parentMessageId === current!.id)
+
+      if (children.length === 0) break
+
+      if (children.length === 1) {
+        current = children[0]
+      } else {
+        // 분기점: selectedPaths에서 선택된 자식 찾기
+        const selectedChildId = selectedPaths[current!.id]
+        current = children.find(c => c.id === selectedChildId) || children[0]
+      }
+    }
+
+    return chain
+  },
+
+  // 형제 메시지 가져오기 (브랜치 네비게이터용)
+  getSiblings: (messageId) => {
+    const { messages } = get()
+    const message = messages.find(m => m.id === messageId)
+    if (!message) return { siblings: [], currentIndex: -1 }
+
+    const siblings = messages.filter(
+      m => m.parentMessageId === message.parentMessageId && m.role === message.role
+    ).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+
+    const currentIndex = siblings.findIndex(s => s.id === messageId)
+    return { siblings, currentIndex }
+  },
+
+  editMessage: async (messageId: string, newContent: string) => {
+    const { messages, currentConversationId, currentModel, isStreaming, buildMessageChain } = get()
+    if (isStreaming || !currentConversationId) return
+
+    // 수정할 메시지 찾기
+    const targetMessage = messages.find((m) => m.id === messageId)
+    if (!targetMessage || targetMessage.role !== 'user') return
+
+    // 새 형제 메시지 생성 (같은 parentMessageId)
+    const newUserMessage: Message = {
+      id: crypto.randomUUID(),
+      role: 'user',
+      content: newContent,
+      parentMessageId: targetMessage.parentMessageId,  // 형제!
+      createdAt: new Date(),
+    }
+
+    const assistantMessage: Message = {
+      id: crypto.randomUUID(),
+      role: 'assistant',
+      content: '',
+      parentMessageId: newUserMessage.id,  // 새 사용자 메시지를 부모로
+      createdAt: new Date(),
+    }
+
+    // 메시지 추가 및 새 경로 선택
+    set((state) => ({
+      messages: [...state.messages, newUserMessage, assistantMessage],
+      selectedPaths: {
+        ...state.selectedPaths,
+        [targetMessage.parentMessageId ?? 'root']: newUserMessage.id  // 새 메시지 경로로 전환
+      },
+      isStreaming: true,
+      error: null,
+      editingMessageId: null,
+      editingContent: '',
+    }))
+
+    const abortController = new AbortController()
+    set({ abortController })
+
+    // 현재 경로의 메시지 체인 빌드 (수정된 메시지 제외)
+    const chain = buildMessageChain()
+    const messagesForApi = chain.filter(m => m.id !== assistantMessage.id)
+
+    // API 호출
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          messages: messagesForApi,
+          conversationId: currentConversationId,
+          model: currentModel,
+          editMessageId: messageId,  // 원본 메시지 ID (형제 생성용)
+        }),
+        signal: abortController.signal,
+      })
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
+
+      // DB에서 생성된 실제 메시지 ID로 동기화
+      const dbUserMessageId = response.headers.get('X-User-Message-Id')
+      if (dbUserMessageId) {
+        set((state) => {
+          const newSelectedPaths = { ...state.selectedPaths }
+
+          // Update selectedPaths where userMessage was the selected child
+          const parentKey = newUserMessage.parentMessageId ?? 'root'
+          if (newSelectedPaths[parentKey] === newUserMessage.id) {
+            newSelectedPaths[parentKey] = dbUserMessageId
+          }
+
+          // Update selectedPaths where userMessage was the parent key
+          if (newSelectedPaths[newUserMessage.id]) {
+            newSelectedPaths[dbUserMessageId] = newSelectedPaths[newUserMessage.id]
+            delete newSelectedPaths[newUserMessage.id]
+          }
+
+          return {
+            messages: state.messages.map((msg) => {
+              if (msg.id === newUserMessage.id) return { ...msg, id: dbUserMessageId }
+              if (msg.parentMessageId === newUserMessage.id) return { ...msg, parentMessageId: dbUserMessageId }
+              return msg
+            }),
+            selectedPaths: newSelectedPaths
+          }
+        })
+      }
+
+      const contentType = response.headers.get('Content-Type') || ''
+
+      if (contentType.includes('application/json')) {
+        const data = await response.json()
+        set((state) => ({
+          messages: state.messages.map((msg) =>
+            msg.id === assistantMessage.id
+              ? { ...msg, content: data.content }
+              : msg
+          ),
+        }))
+      } else {
+        const reader = response.body?.getReader()
+        const decoder = new TextDecoder()
+
+        while (true) {
+          const { done, value } = await reader!.read()
+          if (done) break
+
+          const text = decoder.decode(value, { stream: true })
+
+          if (text) {
+            set((state) => ({
+              messages: state.messages.map((msg) =>
+                msg.id === assistantMessage.id
+                  ? { ...msg, content: (typeof msg.content === 'string' ? msg.content : '') + text }
+                  : msg
+              ),
+            }))
+          }
+        }
+      }
+    } catch (error) {
+      if (error instanceof Error && error.name !== 'AbortError') {
+        set({ error: { type: 'network', message: '메시지 수정 중 오류가 발생했습니다.' } })
+      }
+    } finally {
+      set({ isStreaming: false, abortController: null })
+    }
+  },
 }))

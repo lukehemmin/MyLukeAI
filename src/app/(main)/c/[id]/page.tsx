@@ -28,15 +28,16 @@ async function getConversation(id: string, userId: string) {
 export default async function ConversationPage({
   params
 }: {
-  params: { id: string }
+  params: Promise<{ id: string }>
 }) {
+  const { id } = await params
   const session = await auth()
 
   if (!session?.user?.id) {
     redirect('/login')
   }
 
-  const conversation = await getConversation(params.id, session.user.id)
+  const conversation = await getConversation(id, session.user.id)
   const models = await getEnabledModels()
 
   let userDefaultModelId: string | null = null

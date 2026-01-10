@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, KeyboardEvent, useRef, useEffect, ChangeEvent, DragEvent } from 'react'
+import { useState, KeyboardEvent, useRef, useEffect, ChangeEvent, DragEvent, ClipboardEvent } from 'react'
 import Image from 'next/image'
 import { Send, Square, Paperclip, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -115,6 +115,30 @@ export function ChatInput({
     })
   }
 
+  const handlePaste = (e: ClipboardEvent<HTMLTextAreaElement>) => {
+    const items = e.clipboardData?.items
+    if (!items) return
+
+    const imageItems = Array.from(items).filter(item => item.type.startsWith('image/'))
+
+    if (imageItems.length > 0) {
+      e.preventDefault() // 이미지가 있을 때만 기본 동작 방지
+
+      imageItems.forEach(item => {
+        const file = item.getAsFile()
+        if (file) {
+          const reader = new FileReader()
+          reader.onloadend = () => {
+            if (typeof reader.result === 'string') {
+              onImagesChange([...images, reader.result as string])
+            }
+          }
+          reader.readAsDataURL(file)
+        }
+      })
+    }
+  }
+
   return (
     <div className="max-w-3xl mx-auto w-full p-4">
       {images.length > 0 && (
@@ -171,6 +195,7 @@ export function ChatInput({
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={handleKeyDown}
+          onPaste={handlePaste}
           placeholder={placeholder}
           disabled={disabled || isStreaming}
           className="min-h-[24px] max-h-[200px] resize-none border-0 shadow-none focus-visible:ring-0 bg-transparent py-2.5 px-0 text-base"

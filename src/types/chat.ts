@@ -2,7 +2,7 @@
 
 export interface MessageHistory {
   id: string;
-  content: string;
+  content: string | MessageContentPart[];
   createdAt: Date;
 }
 
@@ -26,7 +26,14 @@ export interface Message {
   content: string | MessageContentPart[];
   reasoning?: string;
   tokens?: number;
+
+  // v2.0: 트리 구조를 위한 부모 메시지 참조
+  parentMessageId?: string | null;
+
+  // deprecated: 기존 히스토리 기반 브랜치 (v2.0에서 트리 구조로 대체됨)
   history?: MessageHistory[];
+  currentHistoryIndex?: number;
+
   context?: MessageContext;
   createdAt: Date;
 }

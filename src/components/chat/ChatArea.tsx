@@ -44,7 +44,14 @@ export function ChatArea({ conversationId: propConversationId, models: allModels
     setCurrentModel,
     tokenUsage,
     updateTokenUsage,
-    currentConversationId
+    currentConversationId,
+    editMessage,
+    selectBranch,
+    getSiblings,
+    buildMessageChain,
+    setEditingMessage,
+    editingMessageId,
+    editingContent
   } = useChatStore()
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
@@ -295,6 +302,40 @@ export function ChatArea({ conversationId: propConversationId, models: allModels
     }
   }
 
+  // 인라인 수정 시작 핸들러
+  const handleEditStart = (messageId: string) => {
+    setEditingMessage(messageId)
+  }
+
+  // 인라인 수정 확정 핸들러
+  const handleEditSubmit = async (messageId: string, newContent: string) => {
+    await editMessage(messageId, newContent)
+  }
+
+  // 수정 취소 핸들러
+  const handleEditCancel = () => {
+    setEditingMessage(null)
+  }
+
+  // 브랜치 네비게이션 핸들러 (트리 기반)
+  const handleBranchNavigate = (messageId: string, direction: 'prev' | 'next') => {
+    const { siblings, currentIndex } = getSiblings(messageId)
+    if (siblings.length <= 1) return
+
+    let newIndex = currentIndex
+    if (direction === 'prev' && currentIndex > 0) {
+      newIndex = currentIndex - 1
+    } else if (direction === 'next' && currentIndex < siblings.length - 1) {
+      newIndex = currentIndex + 1
+    }
+
+    const newSibling = siblings[newIndex]
+    if (newSibling && newSibling.id !== messageId) {
+      const message = messages.find(m => m.id === messageId)
+      selectBranch(message?.parentMessageId ?? null, newSibling.id)
+    }
+  }
+
   const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault()
     setIsDragging(true)
@@ -357,9 +398,21 @@ export function ChatArea({ conversationId: propConversationId, models: allModels
           ) : messages.length === 0 ? (
             <EmptyState onPromptClick={handleSendMessage} />
           ) : (
-            messages.map((message) => (
-              <ChatBubble key={message.id} message={message} />
-            ))
+            buildMessageChain().map((message) => {
+              const { siblings, currentIndex } = getSiblings(message.id)
+              return (
+                <ChatBubble
+                  key={message.id}
+                  message={message}
+                  onEditSubmit={handleEditSubmit}
+                  onBranchNavigate={handleBranchNavigate}
+                  siblingInfo={{ currentIndex, totalSiblings: siblings.length }}
+                  isEditing={editingMessageId === message.id}
+                  onEditStart={handleEditStart}
+                  onEditCancel={handleEditCancel}
+                />
+              )
+            })
           )}
           {isStreaming && messages.length > 0 &&
             (!messages[messages.length - 1].content && !messages[messages.length - 1].reasoning) &&

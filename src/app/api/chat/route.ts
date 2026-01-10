@@ -22,7 +22,7 @@ function countTokens(text: string): number {
 
 export const POST = withAuth(async (req: Request, userId: string) => {
   try {
-    const { messages, conversationId, model = DEFAULT_MODEL } = await req.json()
+    const { messages, conversationId, model = DEFAULT_MODEL, editMessageId, parentMessageId: clientParentMessageId } = await req.json()
 
     // 모델 설정 조회 (DB 우선, 없으면 Static)
     let modelConfig: any = await prisma.model.findUnique({
@@ -87,6 +87,9 @@ export const POST = withAuth(async (req: Request, userId: string) => {
     const apiModelId = modelConfig.apiModelId || modelConfig.id
 
     // Save user message to database
+    let userMessageId: string | null = null
+    let parentMessageIdForAssistant: string | null = null
+
     if (conversationId) {
       const lastMessage = messages[messages.length - 1];
       let contentToSave = '';
@@ -98,13 +101,39 @@ export const POST = withAuth(async (req: Request, userId: string) => {
         contentToSave = JSON.stringify(lastMessage.content);
       }
 
-      await prisma.message.create({
-        data: {
-          conversationId,
-          role: 'user',
-          content: contentToSave,
+      if (editMessageId) {
+        // 수정 모드: 형제 메시지 생성 (같은 부모 메시지 ID 사용)
+        const originalMessage = await prisma.message.findUnique({
+          where: { id: editMessageId }
+        })
+
+        if (originalMessage) {
+          // 새 사용자 메시지를 형제로 생성 (같은 parentMessageId)
+          const newUserMessage = await prisma.message.create({
+            data: {
+              conversationId,
+              role: 'user',
+              content: contentToSave,
+              parentMessageId: originalMessage.parentMessageId  // 형제 관계!
+            }
+          })
+          userMessageId = newUserMessage.id
+          parentMessageIdForAssistant = newUserMessage.id
+          console.log(`[EditMessage] Created sibling message ${userMessageId} (parent: ${originalMessage.parentMessageId})`)
         }
-      })
+      } else {
+        // 일반 모드: 새 메시지 생성 (트리 구조)
+        const newUserMessage = await prisma.message.create({
+          data: {
+            conversationId,
+            role: 'user',
+            content: contentToSave,
+            parentMessageId: clientParentMessageId || null  // 클라이언트에서 전달받은 부모 ID
+          }
+        })
+        userMessageId = newUserMessage.id
+        parentMessageIdForAssistant = newUserMessage.id
+      }
     }
 
     const startTime = Date.now()
@@ -165,6 +194,7 @@ export const POST = withAuth(async (req: Request, userId: string) => {
             role: 'assistant',
             content: '',
             isStreaming: true,
+            parentMessageId: parentMessageIdForAssistant  // 사용자 메시지를 부모로 설정
           }
         })
         assistantMessageId = assistantMessage.id
@@ -250,7 +280,18 @@ export const POST = withAuth(async (req: Request, userId: string) => {
         },
       })
 
-      return result.toTextStreamResponse()
+      // 응답 헤더에 사용자 메시지 ID 포함
+      const streamResponse = result.toTextStreamResponse()
+      if (userMessageId) {
+        const headers = new Headers(streamResponse.headers)
+        headers.set('X-User-Message-Id', userMessageId)
+        return new Response(streamResponse.body, {
+          status: streamResponse.status,
+          statusText: streamResponse.statusText,
+          headers
+        })
+      }
+      return streamResponse
     }
 
     // 비스트리밍 모드 (전체 응답 완료 후 전송)
