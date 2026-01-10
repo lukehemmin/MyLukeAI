@@ -45,6 +45,8 @@ export interface Conversation {
   model: string;
   systemPrompt?: string;
   messages: Message[];
+  // v2.1: 브랜치 선택 상태
+  selectedPaths: Record<string, string>;
   createdAt: Date;
   updatedAt: Date;
 }

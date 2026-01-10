@@ -24,6 +24,7 @@ interface ChatState {
   regenerateLastResponse: () => Promise<void>
   clearError: () => void
   setMessages: (messages: any[]) => void
+  setSelectedPaths: (paths: Record<string, string>) => void // v2.1: 초기화용
   setCurrentConversation: (id: string | null) => void
   setCurrentModel: (model: string) => void
   updateTokenUsage: (usage: { promptTokens: number; completionTokens: number; totalTokens: number }) => void
@@ -54,6 +55,32 @@ export const useChatStore = create<ChatState>((set, get) => ({
   editingMessageId: null,
   editingContent: '',
 
+  // ... (sendMessage and other actions)
+
+  setSelectedPaths: (paths) => set({ selectedPaths: paths }),
+
+  // 브랜치 선택 (분기점에서 경로 변경)
+  selectBranch: (parentMessageId, childId) => {
+    set((state) => ({
+      selectedPaths: {
+        ...state.selectedPaths,
+        [parentMessageId ?? 'root']: childId
+      }
+    }))
+
+    // v2.1: API에 변경 사항 저장 (Optimistic update, fire-and-forget)
+    const { currentConversationId, selectedPaths } = get()
+    if (currentConversationId) {
+      // 바뀐 것만 보낼지 전체를 보낼지? PATCH는 selectedPaths 전체를 덮어씀 (단순화)
+      fetch(`/api/conversations/${currentConversationId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          selectedPaths: get().selectedPaths // 최신 상태 전송
+        })
+      }).catch(err => console.error('Failed to persist branch selection:', err))
+    }
+  },
   sendMessage: async (content: string, conversationId: string | null, images?: string[]) => {
     const { isStreaming } = get()
     if (isStreaming) return null
@@ -325,15 +352,7 @@ export const useChatStore = create<ChatState>((set, get) => ({
     set({ editingMessageId: messageId, editingContent: content })
   },
 
-  // 브랜치 선택 (분기점에서 경로 변경)
-  selectBranch: (parentMessageId, childId) => {
-    set((state) => ({
-      selectedPaths: {
-        ...state.selectedPaths,
-        [parentMessageId ?? 'root']: childId
-      }
-    }))
-  },
+
 
   // 현재 선택된 경로에 따른 메시지 체인 빌드
   buildMessageChain: () => {

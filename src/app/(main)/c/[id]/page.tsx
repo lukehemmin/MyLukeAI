@@ -55,7 +55,12 @@ export default async function ConversationPage({
 
   return (
     <div className="h-full">
-      <ChatArea conversationId={conversation.id} models={models} userDefaultModelId={userDefaultModelId} />
+      <ChatArea
+        conversationId={conversation.id}
+        models={models}
+        userDefaultModelId={userDefaultModelId}
+        selectedPaths={(conversation.selectedPaths as any) || undefined}
+      />
     </div>
   )
 }

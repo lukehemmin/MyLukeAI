@@ -97,6 +97,9 @@ model Conversation {
   isShared     Boolean   @default(false)
   orderIndex   Int       @default(0)
 
+  // v2.1 추가: 브랜치 선택 상태 저장 (ParentID -> SelectedChildID)
+  selectedPaths Json     @default("{}")
+
   user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   messages Message[]
 

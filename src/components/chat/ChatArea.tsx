@@ -17,9 +17,11 @@ interface ChatAreaProps {
   conversationId?: string
   models: ModelConfig[]
   userDefaultModelId?: string | null
+  // v2.1: 서버에서 전달받은 브랜치 선택 상태
+  selectedPaths?: Record<string, string>
 }
 
-export function ChatArea({ conversationId: propConversationId, models: allModels, userDefaultModelId: initialUserDefaultModelId }: ChatAreaProps) {
+export function ChatArea({ conversationId: propConversationId, models: allModels, userDefaultModelId: initialUserDefaultModelId, selectedPaths: initialSelectedPaths }: ChatAreaProps) {
   // 텍스트/비전 모델만 채팅창에 표시
   const models = useMemo(() =>
     allModels.filter(m => !m.type || m.type === 'TEXT' || m.type === 'TEXT_VISION'),
@@ -51,7 +53,8 @@ export function ChatArea({ conversationId: propConversationId, models: allModels
     buildMessageChain,
     setEditingMessage,
     editingMessageId,
-    editingContent
+    editingContent,
+    setSelectedPaths,
   } = useChatStore()
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
@@ -60,6 +63,13 @@ export function ChatArea({ conversationId: propConversationId, models: allModels
   // Drag and drop state
   const [images, setImages] = useState<string[]>([])
   const [isDragging, setIsDragging] = useState(false)
+
+  // v2.1: 페이지 로드 시 selectedPaths 초기화
+  useEffect(() => {
+    if (initialSelectedPaths) {
+      setSelectedPaths(initialSelectedPaths)
+    }
+  }, [initialSelectedPaths, setSelectedPaths])
 
   /**
    * [자동 스크롤 - v1.5]
@@ -84,6 +94,10 @@ export function ChatArea({ conversationId: propConversationId, models: allModels
         const conversation = await response.json()
         if (conversation.messages) {
           setMessages(conversation.messages)
+          // v2.1: 서버에서 가져온 selectedPaths로 업데이트
+          if (conversation.selectedPaths) {
+            setSelectedPaths(conversation.selectedPaths)
+          }
 
           /**
            * [스트리밍 복구 - Polling 메커니즘 - v1.5]
@@ -141,7 +155,7 @@ export function ChatArea({ conversationId: propConversationId, models: allModels
     } finally {
       setIsLoading(false)
     }
-  }, [setMessages, setCurrentModel, models])
+  }, [setMessages, setCurrentModel, models, setSelectedPaths])
 
   useEffect(() => {
     // 모델 목록이 있고, 기본 모델을 설정해야 하는 경우 (새 채팅 등)
@@ -239,6 +253,7 @@ export function ChatArea({ conversationId: propConversationId, models: allModels
       // 스트리밍 중이면 메시지를 초기화하지 않음 (진행 중인 응답 보존)
       if (!isStreaming) {
         setMessages([])
+        setSelectedPaths({}) // 새 채팅이면 경로 초기화
       }
       setCurrentConversation(null)
 
@@ -251,7 +266,7 @@ export function ChatArea({ conversationId: propConversationId, models: allModels
         setCurrentModel(targetModelId)
       }
     }
-  }, [conversationId, fetchConversationMessages, setCurrentConversation, setMessages, models, setCurrentModel, currentConversationId, messages.length, userDefaultModelId, isStreaming])
+  }, [conversationId, fetchConversationMessages, setCurrentConversation, setMessages, models, setCurrentModel, currentConversationId, messages.length, userDefaultModelId, isStreaming, setSelectedPaths])
 
   const handleSendMessage = async (content: string, images?: string[]) => {
     /**

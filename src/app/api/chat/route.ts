@@ -89,6 +89,7 @@ export const POST = withAuth(async (req: Request, userId: string) => {
     // Save user message to database
     let userMessageId: string | null = null
     let parentMessageIdForAssistant: string | null = null
+    let parentKeyForPath: string = 'root'
 
     if (conversationId) {
       const lastMessage = messages[messages.length - 1];
@@ -119,6 +120,7 @@ export const POST = withAuth(async (req: Request, userId: string) => {
           })
           userMessageId = newUserMessage.id
           parentMessageIdForAssistant = newUserMessage.id
+          parentKeyForPath = originalMessage.parentMessageId || 'root'
           console.log(`[EditMessage] Created sibling message ${userMessageId} (parent: ${originalMessage.parentMessageId})`)
         }
       } else {
@@ -133,6 +135,33 @@ export const POST = withAuth(async (req: Request, userId: string) => {
         })
         userMessageId = newUserMessage.id
         parentMessageIdForAssistant = newUserMessage.id
+        parentKeyForPath = clientParentMessageId || 'root'
+      }
+
+      // v2.1: Update selectedPaths in Conversation
+      if (userMessageId) {
+        try {
+          const conversation = await prisma.conversation.findUnique({
+            where: { id: conversationId },
+            select: { selectedPaths: true }
+          })
+
+          if (conversation) {
+            const currentPaths = (conversation.selectedPaths as Record<string, string>) || {}
+            await prisma.conversation.update({
+              where: { id: conversationId },
+              data: {
+                selectedPaths: {
+                  ...currentPaths,
+                  [parentKeyForPath]: userMessageId
+                }
+              }
+            })
+          }
+        } catch (pathError) {
+          console.error('Failed to update selectedPaths:', pathError)
+          // Non-critical error, continue
+        }
       }
     }
 

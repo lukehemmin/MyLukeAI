@@ -55,7 +55,7 @@ export const PATCH = withAuth(async (req, userId, context) => {
       )
     }
 
-    const { title, systemPrompt } = await req.json()
+    const { title, systemPrompt, selectedPaths } = await req.json()
 
     // Verify the conversation belongs to the user
     const existing = await prisma.conversation.findFirst({
@@ -75,6 +75,7 @@ export const PATCH = withAuth(async (req, userId, context) => {
       data: {
         ...(title && { title }),
         ...(systemPrompt !== undefined && { systemPrompt }),
+        ...(selectedPaths && { selectedPaths }),
       },
     })
 
