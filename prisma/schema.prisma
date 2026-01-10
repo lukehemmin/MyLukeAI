@@ -20,6 +20,7 @@ model User {
   image         String?
   preferences   Json      @default("{}")
   role          UserRole  @default(user)
+  password      String?   @db.Text
   
   // 2FA Fields
   twoFactorEnabled Boolean  @default(false)

@@ -13,6 +13,7 @@ export const metadata: Metadata = {
 }
 
 import { auth } from '@/lib/auth'
+import { checkSetupStatus, ensureSetupToken } from '@/lib/setup'
 import { headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 
@@ -35,6 +36,17 @@ export default async function RootLayout({
     if (!isVerified && !isVerifyPage) {
       redirect('/verify-2fa')
     }
+  }
+
+  // Initial Setup Check
+  const isSetup = await checkSetupStatus()
+  if (!isSetup) {
+    await ensureSetupToken()
+    if (!pathname.startsWith('/setup') && !pathname.startsWith('/api')) {
+      redirect('/setup')
+    }
+  } else if (pathname.startsWith('/setup')) {
+    redirect('/')
   }
 
   return (
