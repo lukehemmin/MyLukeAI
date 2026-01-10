@@ -44,7 +44,7 @@ export default function AdminStatsClient({ data }: AdminStatsClientProps) {
   // Clean up model names for chart (remove potential artifacts like '}')
   const cleanModelStats = data.modelStats.map(stat => ({
     ...stat,
-    name: stat.name.replace('}', '').trim()
+    name: stat.name.replace(/}/g, '').trim()
   }))
 
   return (

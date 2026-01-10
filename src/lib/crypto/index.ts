@@ -46,7 +46,11 @@ export function decryptApiKey(encryptedData: EncryptedData): string {
 }
 
 export function hashApiKey(plainText: string): string {
-  return crypto.createHash('sha256').update(plainText).digest('hex')
+  // Use PBKDF2 for better security against brute-force (CodeQL remediation)
+  // We use a fixed salt because we need deterministic output for deduplication (unique constraint)
+  // In a perfect world, we'd use a PEPPER env var, but using the encryption key or a static string is better than fast SHA256.
+  const salt = process.env.API_KEY_ENCRYPTION_KEY || 'static-salt-for-deduplication'
+  return crypto.pbkdf2Sync(plainText, salt, 10000, 64, 'sha512').toString('hex')
 }
 
 export function serializeEncryptedData(encryptedData: EncryptedData): string {
