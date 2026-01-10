@@ -24,6 +24,7 @@ export default async function MainLayout({
     where: {
       userId: session.user.id,
       isArchived: false, // 기본적으로 보관된 채팅은 숨김
+      deletedAt: null, // 삭제된 채팅 제외
     },
     orderBy: [
       { isPinned: 'desc' },

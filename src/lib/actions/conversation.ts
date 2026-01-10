@@ -100,6 +100,45 @@ export async function deleteConversation(id: string) {
         throw new Error('Unauthorized')
     }
 
+    // Soft delete
+    await prisma.conversation.update({
+        where: {
+            id,
+            userId: session.user.id,
+        },
+        data: {
+            deletedAt: new Date(),
+        },
+    })
+
+    revalidatePath('/')
+}
+
+export async function restoreConversation(id: string) {
+    const session = await auth()
+    if (!session?.user?.id) {
+        throw new Error('Unauthorized')
+    }
+
+    await prisma.conversation.update({
+        where: {
+            id,
+            userId: session.user.id,
+        },
+        data: {
+            deletedAt: null,
+        },
+    })
+
+    revalidatePath('/')
+}
+
+export async function permanentDeleteConversation(id: string) {
+    const session = await auth()
+    if (!session?.user?.id) {
+        throw new Error('Unauthorized')
+    }
+
     await prisma.conversation.delete({
         where: {
             id,
@@ -108,6 +147,21 @@ export async function deleteConversation(id: string) {
     })
 
     revalidatePath('/')
+}
+
+export async function getTrashConversations() {
+    const session = await auth()
+    if (!session?.user?.id) {
+        throw new Error('Unauthorized')
+    }
+
+    return await prisma.conversation.findMany({
+        where: {
+            userId: session.user.id,
+            deletedAt: { not: null },
+        },
+        orderBy: { deletedAt: 'desc' },
+    })
 }
 
 export async function getArchivedConversations() {
@@ -120,6 +174,7 @@ export async function getArchivedConversations() {
         where: {
             userId: session.user.id,
             isArchived: true,
+            deletedAt: null, // Ensure we don't fetch deleted archived chats
         },
         orderBy: { updatedAt: 'desc' },
     })

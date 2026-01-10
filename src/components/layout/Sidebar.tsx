@@ -12,6 +12,8 @@ import { useIsMobile } from '@/hooks/useMediaQuery'
 import { SettingsModal } from '@/components/settings/SettingsModal'
 import { ChatItemMenu } from '@/components/chat/ChatItemMenu'
 import { getArchivedConversations, reorderConversations, togglePinConversation, toggleArchiveConversation, deleteConversation, shareConversation, renameConversation } from '@/lib/actions/conversation'
+import { DeleteConfirmationModal } from '@/components/modals/DeleteConfirmationModal'
+import { TrashModal } from '@/components/modals/TrashModal'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -98,6 +100,7 @@ function SortableChatItem({ conversation, currentConversationId, onSelect, onUpd
 
   // Local state for dialogs
   const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [newTitle, setNewTitle] = useState(conversation.title)
 
   const handlePin = async () => {
@@ -113,7 +116,17 @@ function SortableChatItem({ conversation, currentConversationId, onSelect, onUpd
   }
 
   const handleDelete = async () => {
-    if (!confirm('정말 삭제하시겠습니까?')) return
+    // Check for "Don't ask again" preference
+    const confirmedUntil = localStorage.getItem('deleteActionConfirmedUntil')
+    if (confirmedUntil && new Date(confirmedUntil) > new Date()) {
+      await performDelete()
+      return
+    }
+
+    setIsDeleteDialogOpen(true)
+  }
+
+  const performDelete = async () => {
     try {
       await deleteConversation(conversation.id)
     } catch { toast({ variant: 'destructive', description: '삭제 실패' }) }
@@ -204,6 +217,12 @@ function SortableChatItem({ conversation, currentConversationId, onSelect, onUpd
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <DeleteConfirmationModal
+        open={isDeleteDialogOpen}
+        onOpenChange={setIsDeleteDialogOpen}
+        onConfirm={performDelete}
+      />
     </>
   )
 }
@@ -224,6 +243,7 @@ export function Sidebar({
   const searchParams = useSearchParams()
   const [isSettingsOpen, setIsSettingsOpen] = useState(false)
   const [isArchivedOpen, setIsArchivedOpen] = useState(false)
+  const [isTrashOpen, setIsTrashOpen] = useState(false)
   const [archivedConversations, setArchivedConversations] = useState<Conversation[]>([])
 
   // Need to manage order locally for DnD
@@ -506,6 +526,10 @@ export function Sidebar({
                   <span>관리자 대시보드</span>
                 </DropdownMenuItem>
               )}
+              <DropdownMenuItem onClick={() => setIsTrashOpen(true)}>
+                <Trash2 className="mr-2 h-4 w-4" />
+                <span>휴지통</span>
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => setIsArchivedOpen(true)}>
                 <Archive className="mr-2 h-4 w-4" />
                 <span>보관된 채팅 ({archivedConversations.length > 0 ? archivedConversations.length : ''})</span>
@@ -596,6 +620,11 @@ export function Sidebar({
           </div>
         </DialogContent>
       </Dialog>
+
+      <TrashModal
+        open={isTrashOpen}
+        onOpenChange={setIsTrashOpen}
+      />
     </>
   )
 }
