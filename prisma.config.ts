@@ -8,7 +8,13 @@ export default defineConfig({
   },
   datasource: {
     // @ts-ignore
-    url: process.env.POSTGRES_PRISMA_URL ?? process.env.DATABASE_URL,
+    url: (() => {
+      const url = process.env.POSTGRES_PRISMA_URL ?? process.env.DATABASE_URL
+      if (!url) {
+        throw new Error('❌ DATABASE_URL or POSTGRES_PRISMA_URL is missing. Please add it to your Environment Variables.')
+      }
+      return url
+    })(),
     // @ts-ignore
     directUrl: process.env.POSTGRES_URL_NON_POOLING,
   },
