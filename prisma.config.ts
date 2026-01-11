@@ -11,7 +11,8 @@ export default defineConfig({
     url: (() => {
       const url = process.env.POSTGRES_PRISMA_URL ?? process.env.DATABASE_URL
       if (!url) {
-        throw new Error('❌ DATABASE_URL or POSTGRES_PRISMA_URL is missing. Please add it to your Environment Variables.')
+        console.warn('⚠️  DATABASE_URL is missing. Using placeholder to allow build to proceed.')
+        return 'postgresql://dummy:dummy@localhost:5432/dummy'
       }
       return url
     })(),
