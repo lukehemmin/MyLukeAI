@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
-    "vercel-build": "prisma migrate deploy && next build",
+    "vercel-build": "if [ -n \"$DATABASE_URL\" ]; then prisma migrate deploy; else echo '⚠️ DATABASE_URL missing, skipping migration'; fi && next build",
     "start": "prisma migrate deploy && next start",
     "lint": "eslint . --ext .ts,.tsx,.js,.jsx",
     "test": "vitest",
