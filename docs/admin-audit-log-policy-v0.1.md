@@ -145,6 +145,7 @@
 | `attachment_type` | enum | `screenshot`, `diff`, `report`, `json_snapshot` |
 | `storage_key` | string | 저장소 참조 |
 | `metadata_json` | jsonb | 메타데이터 |
+| `created_at` | datetime | 첨부 생성 시각 |
 
 ---
 

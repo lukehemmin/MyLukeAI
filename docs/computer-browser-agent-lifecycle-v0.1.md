@@ -5,7 +5,7 @@
 - **문서명**: 실행형 AI 개발 플랫폼 Computer + Browser + Agent 생명주기 정의서
 - **버전**: v0.1
 - **목적**: 사용자가 작업을 요청한 시점부터 Computer 세션, 브라우저 세션, 에이전트 실행, 결과 저장, 재개, 종료까지의 흐름을 정의한다.
-- **관련 문서**: `docs/product-vision-v0.1.md`, `docs/screen-list-definition-v0.2.md`, `docs/permission-plan-matrix-v0.1.md`
+- **관련 문서**: `docs/product-vision-v0.1.md`, `docs/screen-list-definition-v0.2.md`, `docs/permission-plan-matrix-v0.1.md`, `docs/admin-panel-spec-v0.1.md`
 
 ---
 

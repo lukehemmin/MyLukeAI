@@ -146,38 +146,38 @@
 
 ## 6. 핵심 관계 원칙
 
-## 6.1 Workspace
+### 6.1 Workspace
 
 - 모든 자산은 기본적으로 하나의 `workspace`에 소속된다.
 - `workspace_type`은 `personal`, `team`, `enterprise`를 가질 수 있다.
 - 개인 자산과 팀 자산은 같은 추상 모델을 공유하되, ownership과 membership 규칙이 다르다.
 
-## 6.2 Team
+### 6.2 Team
 
 - `team`은 협업 운영의 메타 엔터티다.
 - 일반적으로 팀은 하나의 `team workspace`와 1:1 또는 강한 연관을 가진다.
 - 팀 플랜, 좌석, 팀 정책, 팀 멤버십은 팀 단위로 관리한다.
 
-## 6.3 Group
+### 6.3 Group
 
 - `group`은 팀과 별개로, 사용자에게 권한/정책을 부여하는 관리자 단위다.
 - 같은 사용자가 하나 이상의 그룹에 속할 수 있다.
 - 그룹은 기본 모델, 기능 접근, 공유 정책, 업로드 정책 등에 영향을 줄 수 있다.
 
-## 6.4 Project
+### 6.4 Project
 
 - `project`는 실행형 작업의 중심 단위다.
 - 문서, 채팅, 에이전트 실행, Computer 세션, 브라우저 테스트는 프로젝트와 연결될 수 있어야 한다.
 - 일부 자산은 프로젝트 없이 워크스페이스에만 존재할 수 있다.
 
-## 6.5 Chat / Document
+### 6.5 Chat / Document
 
 - `chat_thread`는 워크스페이스에 속하며, 필요 시 프로젝트와 연결된다.
 - `document`도 워크스페이스에 속하며, 필요 시 프로젝트와 연결된다.
 - 문서와 채팅은 실행형 작업의 보조 자산이지만, 프로젝트와 연계될 때 가치가 커진다.
 - 첨부 이미지와 파일 본문은 object storage에 두고, DB에는 `file_asset`와 `attachment` 메타데이터만 저장한다.
 
-## 6.6 Agent / Execution
+### 6.6 Agent / Execution
 
 - `agent_run`은 채팅, 프로젝트, 세션 중 하나 이상과 연결될 수 있다.
 - `approval_request`는 에이전트 실행, 브라우저 액션, 파일 변경, 배포 액션 등과 연결될 수 있다.
@@ -185,7 +185,7 @@
 - 세션에서 생성된 artifact는 워크스페이스 및 프로젝트 범위를 상속한다.
 - 실행 요청, 세션, 에이전트 실행은 모두 canonical `execution_mode`를 가져 `conversation`, `research`, `development`, `test`를 일관되게 표현한다.
 
-## 6.7 Billing
+### 6.7 Billing
 
 - `billing_account`는 개인, 팀, 엔터프라이즈 조직이 될 수 있다.
 - `subscription`은 `billing_account`에 연결된다.
@@ -195,7 +195,7 @@
 
 ## 7. 권장 핵심 엔터티 구조
 
-## 7.1 user
+### 7.1 user
 
 | 필드 | 설명 |
 |---|---|
@@ -206,7 +206,7 @@
 | `global_role` | 기본 전역 역할 |
 | `created_at` | 생성 시각 |
 
-## 7.2 workspace
+### 7.2 workspace
 
 | 필드 | 설명 |
 |---|---|
@@ -218,7 +218,7 @@
 | `billing_account_id` | 과금 계정 |
 | `created_at` | 생성 시각 |
 
-## 7.3 workspace_membership
+### 7.3 workspace_membership
 
 | 필드 | 설명 |
 |---|---|
@@ -227,7 +227,32 @@
 | `role` | `member`, `admin`, `owner` 등 |
 | `joined_at` | 참여 시각 |
 
-## 7.4 project
+### 7.3a team
+
+> 협업 운영의 핵심 단위. `workspace`, `billing_account`와 강하게 연결되며, 좌석/플랜/정책을 팀 단위로 관리한다.
+
+| 필드 | 설명 |
+|---|---|
+| `id` | 팀 UUID |
+| `name` | 팀 표시 이름 |
+| `slug` | URL 친화적 식별자 (초대 링크, 팀 URL에 사용) |
+| `description` | 팀 설명 nullable |
+| `avatar_url` | 팀 로고/아바타 nullable |
+| `team_type` | `team`, `enterprise` |
+| `status` | `active`, `suspended`, `pending_setup`, `deleted` |
+| `owner_user_id` | 최초 생성 소유자 (Team Owner) |
+| `primary_workspace_id` | 연결된 팀 워크스페이스 nullable (설정 전 null) |
+| `billing_account_id` | 과금 계정 |
+| `seat_limit` | 최대 좌석 수 (플랜/계약에 따라 결정) |
+| `default_group_id` | 가입 시 자동 배정 그룹 nullable |
+| `invite_policy` | `admin_only`, `any_member` |
+| `email_domain_restriction` | 허용 이메일 도메인 (Enterprise SSO 도메인 매칭용) nullable |
+| `sso_enabled` | SSO 활성화 여부 |
+| `created_at` | 생성 시각 |
+| `updated_at` | 수정 시각 |
+| `deleted_at` | 삭제 시각 (soft delete) nullable |
+
+### 7.4 project
 
 | 필드 | 설명 |
 |---|---|
@@ -239,7 +264,7 @@
 | `created_by_user_id` | 생성자 |
 | `archived_at` | 아카이브 시각 |
 
-## 7.5 document
+### 7.5 document
 
 | 필드 | 설명 |
 |---|---|
@@ -250,7 +275,7 @@
 | `visibility` | `private`, `workspace`, `team` |
 | `created_by_user_id` | 생성자 |
 
-## 7.6 chat_thread
+### 7.6 chat_thread
 
 | 필드 | 설명 |
 |---|---|
@@ -261,7 +286,7 @@
 | `model_id` | 기본 모델 |
 | `created_by_user_id` | 생성자 |
 
-## 7.7 agent_run
+### 7.7 agent_run
 
 | 필드 | 설명 |
 |---|---|
@@ -274,7 +299,7 @@
 | `status` | `pending`, `waiting_for_resources`, `waiting_for_approval`, `running`, `retrying`, `completed`, `failed`, `cancelled` |
 | `triggered_by_user_id` | 트리거한 사용자 |
 
-## 7.8 approval_request
+### 7.8 approval_request
 
 이 엔터티는 관리자 설정 변경 승인용 `setting_change_request`와 별개다. `approval_request`는 실행 도메인에서 사용자 또는 운영자의 명시적 승인이 필요한 액션을 표현하고, 설정 저장 승인 큐는 admin settings domain에서 별도로 관리한다.
 
@@ -293,7 +318,7 @@
 | `reason` | 승인 요청 사유 |
 | `resolved_reason` | 승인/거절 사유 |
 
-## 7.9 computer_session
+### 7.9 computer_session
 
 | 필드 | 설명 |
 |---|---|
@@ -307,7 +332,7 @@
 | `execution_template_id` | 템플릿 |
 | `created_by_user_id` | 생성자 |
 
-## 7.10 billing_account
+### 7.10 billing_account
 
 | 필드 | 설명 |
 |---|---|
@@ -316,7 +341,7 @@
 | `owner_ref` | 실제 소유 주체 |
 | `status` | 상태 |
 
-## 7.11 file_asset
+### 7.11 file_asset
 
 | 필드 | 설명 |
 |---|---|
@@ -336,7 +361,7 @@
 | `created_by_user_id` | 업로더 |
 | `created_at` | 생성 시각 |
 
-## 7.12 session_artifact
+### 7.12 session_artifact
 
 | 필드 | 설명 |
 |---|---|
@@ -357,7 +382,7 @@
 | `promoted_file_asset_id` | 승격된 장기 자산 nullable |
 | `created_at` | 생성 시각 |
 
-## 7.13 execution_queue_item
+### 7.13 execution_queue_item
 
 | 필드 | 설명 |
 |---|---|
@@ -367,7 +392,7 @@
 | `requested_execution_mode` | `conversation`, `research`, `development`, `test` |
 | `status` | `queued`, `assigned`, `cancelled`, `expired` |
 
-## 7.14 session_log_chunk
+### 7.14 session_log_chunk
 
 | 필드 | 설명 |
 |---|---|
@@ -379,7 +404,7 @@
 | `content_text` | 로그 본문 |
 | `created_at` | 생성 시각 |
 
-## 7.15 attachment
+### 7.15 attachment
 
 | 필드 | 설명 |
 |---|---|
@@ -393,7 +418,7 @@
 | `created_by_user_id` | 첨부 생성자 |
 | `created_at` | 생성 시각 |
 
-## 7.16 browser_policy_profile
+### 7.16 browser_policy_profile
 
 | 필드 | 설명 |
 |---|---|
@@ -404,7 +429,7 @@
 | `allow_downloads` | 다운로드 허용 여부 |
 | `recording_policy` | `none`, `screenshots`, `session_recording` |
 
-## 7.17 group_policy
+### 7.17 group_policy
 
 | 필드 | 설명 |
 |---|---|
@@ -414,7 +439,7 @@
 | `permissions_json` | 권한 매트릭스 |
 | `feature_flags_json` | 기능 on/off |
 
-## 7.18 integration_connection
+### 7.18 integration_connection
 
 | 필드 | 설명 |
 |---|---|
@@ -424,7 +449,7 @@
 | `secret_ref_id` | 민감값 nullable |
 | `health_status` | 연결 상태 |
 
-## 7.19 setting_validation_run
+### 7.19 setting_validation_run
 
 | 필드 | 설명 |
 |---|---|
@@ -434,7 +459,7 @@
 | `result` | `passed`, `failed` |
 | `validated_at` | 검증 시각 |
 
-## 7.20 setting_test_run
+### 7.20 setting_test_run
 
 | 필드 | 설명 |
 |---|---|
@@ -453,6 +478,9 @@
 user 1--n auth_identity
 user 1--n api_key
 user n--m group (through group_membership)
+user 1--n role_assignment
+workspace 1--n role_assignment
+project 0..1--n role_assignment
 
 user 1--1 personal workspace
 team 1--1 team workspace
@@ -551,24 +579,24 @@ audit_log n--1 user (actor)
 
 ## 10. 설계상 중요한 구분
 
-## 10.1 Team vs Workspace
+### 10.1 Team vs Workspace
 
 - 팀은 협업 조직 단위
 - 워크스페이스는 자산 소유 단위
 - 팀 워크스페이스는 둘이 강하게 연결되지만 개념상 동일하지 않다.
 
-## 10.2 Group vs Team
+### 10.2 Group vs Team
 
 - Team: 같이 일하는 협업 단위
 - Group: 관리자 정책을 적용하기 위한 권한 단위
 
-## 10.3 Chat vs Project
+### 10.3 Chat vs Project
 
 - 채팅은 입구
 - 프로젝트는 실행의 중심 단위
 - 실행형 플랫폼에서는 프로젝트가 더 중심적이다.
 
-## 10.4 Settings vs Runtime Policy
+### 10.4 Settings vs Runtime Policy
 
 - 관리자 설정은 설정 도메인에 저장
 - 실제 세션에는 `resolved policy snapshot`이 적용되어 실행 중 일관성을 보장

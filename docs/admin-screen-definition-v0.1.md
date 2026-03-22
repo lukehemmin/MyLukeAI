@@ -5,7 +5,7 @@
 - **문서명**: 실행형 AI 개발 플랫폼 관리자 IA 및 화면 정의서
 - **버전**: v0.1
 - **목적**: 관리자 콘솔의 정보구조와 화면별 목적, 기능, 상태, 주요 컴포넌트를 정의하여 기능정의서와 디자인정의서의 기준 문서로 사용한다.
-- **관련 문서**: `docs/admin-panel-spec-v0.1.md`, `docs/screen-list-definition-v0.2.md`, `docs/permission-plan-matrix-v0.1.md`, `docs/computer-browser-agent-lifecycle-v0.1.md`
+- **관련 문서**: `docs/admin-panel-spec-v0.1.md`, `docs/screen-list-definition-v0.2.md`, `docs/permission-plan-matrix-v0.1.md`, `docs/computer-browser-agent-lifecycle-v0.1.md`, `docs/admin-audit-log-policy-v0.1.md`
 
 ---
 
