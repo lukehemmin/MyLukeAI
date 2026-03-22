@@ -109,7 +109,6 @@ API 우선순위는 다음 기준으로 판단한다.
 
 - `GET /api/models`
 - `GET /api/models/{id}`
-- `GET /api/model-providers/health`
 
 #### 이유
 
@@ -263,6 +262,8 @@ API 우선순위는 다음 기준으로 판단한다.
 - `POST /api/admin/settings/{categoryKey}/test`
 - `POST /api/admin/settings/{categoryKey}/reset`
 - `GET /api/admin/settings/approval-requests`
+- `POST /api/admin/settings/approval-requests`
+- `GET /api/admin/settings/approval-requests/{requestId}`
 - `POST /api/admin/settings/approval-requests/{requestId}/approve`
 - `POST /api/admin/settings/approval-requests/{requestId}/reject`
 - `GET /api/admin/provider-connections`

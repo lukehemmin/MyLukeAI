@@ -80,7 +80,7 @@ Admin
   - Interface
   - Audio
   - Images
-  - Pipelines
+  - Pipelines (v1 예약)
   - Billing & Plans
   - Security & Audit
   - Database & Data Ops
@@ -210,7 +210,7 @@ Admin
 | ADMIN-07-11 | Interface | UI/프롬프트/생성 UX 정책 |
 | ADMIN-07-12 | Audio | STT/TTS 정책 |
 | ADMIN-07-13 | Images | 이미지 생성/편집 정책 |
-| ADMIN-07-14 | Pipelines | 파이프라인/워크플로우 설치 및 정책 |
+| ADMIN-07-14 | Pipelines **(v1 예약)** | 파이프라인/워크플로우 설치 및 정책 (MVP에서 탭 예약만, 실제 기능은 v1 이후) |
 | ADMIN-07-15 | Billing & Plans | 플랜, entitlement, 좌석, 사용량 정책 |
 | ADMIN-07-16 | Security & Audit | 보안, 감사, 민감설정 보호 |
 | ADMIN-07-17 | Database & Data Ops | 설정/데이터 export/import 및 복구 |
@@ -962,14 +962,16 @@ Admin
 
 ### ADMIN-07-14 Pipelines
 
+> **출시 단계**: **v1 (운영 고도화 단계)** 노출 범위. ADMIN-07 부모 화면(관리자 설정 상세)은 MVP이지만, Pipelines 설치/관리 기능 자체는 Functions/Pipelines 확장 기능(P2, Phase 9) 단계에서 노출한다. 카테고리 탭은 예약 상태로 존재하되 실제 기능 노출은 v1 이후다.
+
 #### 목적
 
 - 파이프라인/워크플로우 설치와 실행 정책을 운영
 
 #### 핵심 기능
 
-- 파일 업로드 설치
-- GitHub Raw URL 설치
+- 파일 업로드 설치 (`POST /api/admin/pipelines/upload`)
+- GitHub Raw URL 설치 (`POST /api/admin/pipelines/install-from-url`)
 - Enable / Disable
 - Valve 설정
 - 위험 경고 표시

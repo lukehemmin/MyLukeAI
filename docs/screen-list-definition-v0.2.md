@@ -109,7 +109,7 @@ Admin
   - Interface
   - Audio
   - Images
-  - Pipelines
+  - Pipelines (v1)
   - Billing & Plans
   - Security & Audit
   - Database & Data Ops
@@ -150,7 +150,7 @@ v1 Expansion
 | ADMIN-04 | Evaluations | Platform Admin | v1 | 피드백, 리더보드, 아레나 모델 관리 |
 | ADMIN-05 | Functions | Platform Admin | v1 | 함수/툴 확장 기능 관리 |
 | ADMIN-06 | 관리자 설정 허브 | Platform Admin | MVP | 관리자 설정 카테고리 탐색 및 검색 |
-| ADMIN-07 | 관리자 설정 상세 | Platform Admin | MVP | OpenWebUI 수준의 세부 운영 설정 수정 |
+| ADMIN-07 | 관리자 설정 상세 | Platform Admin | MVP | 설정 카테고리별 세부 운영 설정 수정 (Pipelines 서브화면 ADMIN-07-14는 v1 노출 범위) |
 | ORCH-01 | 멀티에이전트 오케스트레이션 빌더 | 고급 사용자 | v1 | 역할 기반 멀티에이전트 구성 |
 | WF-01 | 워크플로우 목록 / 빌더 | 고급 사용자 | v1 | 자동화 생성 및 실행 관리 |
 | BILL-01 | 결제 / 청구 설정 | Team Admin 이상 | v1 | 실제 결제 연동, 청구수단 관리 |
@@ -948,7 +948,8 @@ v1 Expansion
 
 - General, Connections, Models, Documents & Retrieval, Web Search 설정
 - Computer & Browser, Code Execution, Agents 설정
-- Audio, Images, Integrations, Pipelines 설정
+- Audio, Images, Integrations 설정
+- Pipelines 설정 (v1 예약 — ADMIN-07-14는 MVP에서 탭 예약 상태만 유지, 실제 기능 노출은 v1 이후)
 - Billing & Plans, Security & Audit, Database & Data Ops 설정
 - 저장 전 검증과 연결 테스트
 - 적용 범위, 보존 정책, 승인 영향, 감사 이력 확인
@@ -965,7 +966,7 @@ v1 Expansion
 #### 비고
 
 - 세부 카테고리별 구조는 `docs/admin-screen-definition-v0.1.md`와 `docs/admin-panel-spec-v0.1.md`를 기준으로 확장함
-- `ADMIN-07`은 부모 화면 ID이며, 실제 세부 화면은 `ADMIN-07-01`부터 `ADMIN-07-17`까지의 하위 설정 화면으로 분해 가능함
+- `ADMIN-07`은 부모 화면 ID이며, 실제 세부 화면은 `ADMIN-07-01`부터 `ADMIN-07-17`까지의 하위 설정 화면으로 분해 가능함. 이 중 `ADMIN-07-14 Pipelines`는 v1 예약 범위이므로 MVP에서는 탭이 예약 상태로만 존재하고 실제 기능은 노출되지 않음
 
 ---
 

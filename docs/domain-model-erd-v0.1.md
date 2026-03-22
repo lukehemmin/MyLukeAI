@@ -134,12 +134,14 @@
 | `setting_value` | 실제 설정값 |
 | `setting_secret` | 민감 설정값 |
 | `setting_change_log` | 설정 변경 이력 |
+| `setting_change_request` | 승인 대기 중인 설정 변경 요청 (approval queue) |
 | `setting_snapshot` | 설정 스냅샷 |
 | `setting_validation_run` | 설정 검증 실행 기록 |
 | `setting_test_run` | 설정 테스트 실행 기록 |
 | `browser_policy_profile` | 브라우저 실행 정책 묶음 |
 | `group_policy` | 그룹별 권한/기능 정책 |
 | `integration_connection` | 외부 시스템 연동 객체 |
+| `function_definition` | 관리자 관리형 실행 확장/함수 메타데이터 (v1 범위) |
 | `audit_log` | 감사 로그 |
 
 ---
@@ -550,6 +552,8 @@ setting_category 1--n setting_test_run
 setting_definition 1--n setting_value
 setting_definition 1--n setting_change_log
 setting_value 0..1--1 setting_secret
+setting_change_request n--1 user (requested_by)
+setting_change_request 1--0..n setting_change_log (승인 시 field 수만큼 생성, 반려/만료 시 0개)
 audit_log n--1 user (actor)
 ```
 
@@ -646,6 +650,7 @@ audit_log n--1 user (actor)
 - project_member 세분 권한
 - evaluation_feedback 정교화
 - seat_allocation 상세화
+- function_definition (admin-managed 실행 확장)
 
 ---
 

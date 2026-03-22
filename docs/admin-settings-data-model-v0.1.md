@@ -106,6 +106,8 @@
 - Execution Template
 - Integration Connection
 
+> **Note**: `Function`은 `function_definition`을 canonical 엔터티로 사용하며 persistence 구조는 10.8절에 정의한다. `Pipeline`은 별도 리소스(`/api/admin/pipelines/...`)로 유지되며, persistence 상세는 추후 별도 정리한다.
+
 예시:
 
 - OpenAI provider connection 3개
@@ -131,7 +133,9 @@
 
 ### 5.2 우선순위
 
-기본 우선순위는 다음과 같다.
+scope resolution 규칙은 다음과 같다.
+
+**기본 ownership chain (낮은 번호가 낮은 우선순위):**
 
 ```text
 system default
@@ -140,13 +144,33 @@ system default
 -> group
 -> team
 -> project
--> runtime/session override
+```
+
+**resource-targeted override (provider / model):**
+
+- `provider`와 `model` scope는 ownership chain 안에 끼워 넣지 않고, 특정 리소스를 해석할 때 ownership chain 결과 위에 추가 적용되는 override다.
+- `provider` override: 특정 provider를 경유하는 설정을 해석할 때 적용된다.
+- `model` override: 특정 model을 사용할 때 적용된다. `provider`와 `model` override가 동시에 있으면 `model`-specific override가 `provider`-specific override보다 우선한다.
+
+**runtime/session override:**
+
+- 최종 우선이며, 모든 persistence 기반 override 위에 적용된다.
+
+**최종 우선순위 요약:**
+
+```text
+system default
+-> global -> plan -> group -> team -> project
+-> provider override (해당 provider 컨텍스트에서)
+-> model override (해당 model 컨텍스트에서, provider override보다 우선)
+-> runtime/session override (최종 우선)
 ```
 
 ### 5.3 적용 원칙
 
 - 현재 MVP는 `global` 중심으로 구현 가능하다.
 - 하지만 데이터 모델은 `plan`, `group`, `team`, `project`까지 수용 가능해야 한다.
+- `provider`와 `model` scope는 특수 resource-targeted override로, 해당 리소스가 활성화되는 시점에 추가 적용된다.
 - 설정 조회 API는 항상 `resolved value`와 `rawOverride`를 모두 제공할 수 있어야 한다.
 
 ---
@@ -274,7 +298,7 @@ system default
 | `old_value_json` | jsonb nullable | 이전 값 |
 | `new_value_json` | jsonb nullable | 새 값 |
 | `reason` | text nullable | 변경 사유 |
-| `approval_request_id` | uuid nullable | 연동된 승인 요청 |
+| `setting_change_request_id` | uuid nullable | 연동된 admin settings 변경 요청 (`setting_change_request.id` FK, 실행 도메인 `approval_request`와 무관) |
 | `applied_by` | uuid | 변경 관리자 |
 | `applied_at` | datetime | 변경 시각 |
 | `apply_mode` | enum | 반영 방식 |
@@ -301,6 +325,13 @@ system default
 | `resolved_reason` | text nullable | 결정 사유 |
 | `created_at` | datetime | 생성 시각 |
 | `resolved_at` | datetime nullable | 결정 시각 |
+
+### setting_change_request ↔ setting_change_log 관계
+
+- `setting_change_request`와 `setting_change_log`는 1:1이 아니다.
+- 하나의 `setting_change_request`는 `payload_json` 안에 여러 필드 변경을 포함할 수 있으므로, 승인 시 field 단위로 `setting_change_log`를 여러 개 생성한다.
+- 반려(`rejected`) 또는 만료(`expired`) 된 요청은 `setting_change_log`를 만들지 않는다.
+- `setting_change_log.setting_change_request_id`는 admin settings domain 전용 FK이며, 실행 도메인의 `approval_request`와 혼용하지 않는다.
 
 ### 8.3 setting_snapshot
 
@@ -480,6 +511,26 @@ Computer 세션 템플릿.
 | `secret_ref_id` | uuid nullable | 민감값 |
 | `health_status` | enum | 상태 |
 | `is_enabled` | boolean | 활성 여부 |
+
+## 10.8 function_definition
+
+관리자 관리형 실행 확장/함수 메타데이터. SQL reserved word를 피하기 위해 `function_definition`을 canonical 엔터티명으로 사용한다.
+
+> **출시 범위**: v1/P2. `function_definition`은 Functions 전용 canonical 엔터티다. canonical persistence 구조를 먼저 정의해 두되, 실제 UI 노출과 API 활성화는 Functions 확장 기능 단계(Phase 9)에서 한다. Pipelines는 `function_definition`에 포함되지 않으며, 별도 리소스(`/api/admin/pipelines/...`)로 유지된다. Pipelines persistence 상세 구조는 추후 별도 정리한다.
+
+| 필드 | 타입 | 설명 |
+|---|---|---|
+| `id` | uuid | PK |
+| `name` | string | 표시명 |
+| `description` | text nullable | 기능 설명 |
+| `function_type` | enum | `filter`, `action` 등 Functions 전용 확장 유형 (`pipe` 제외 — Pipelines는 별도 리소스) |
+| `content` | text | 함수 코드 또는 정의 본문 |
+| `meta_json` | jsonb | 버전, 의존성, 파라미터 스키마 등 메타데이터 |
+| `is_enabled` | boolean | 활성 여부 |
+| `is_global` | boolean | 전체 사용자 노출 여부 |
+| `created_by` | uuid | 생성 관리자 |
+| `created_at` | datetime | 생성 시각 |
+| `updated_at` | datetime | 수정 시각 |
 
 ---
 
@@ -855,11 +906,14 @@ Computer 세션 템플릿.
 ## 15.9 Pipelines
 
 - `GET /api/admin/pipelines`
-- `POST /api/admin/pipelines`
+- `POST /api/admin/pipelines/upload`
+- `POST /api/admin/pipelines/install-from-url`
 - `PATCH /api/admin/pipelines/{id}`
 - `POST /api/admin/pipelines/{id}/enable`
 - `POST /api/admin/pipelines/{id}/disable`
 - `GET /api/admin/pipelines/{id}/logs`
+
+파이프라인 생성은 두 가지 방식으로 분리된다. `upload`는 파일 binary 또는 multipart form을 받고, `install-from-url`은 `sourceUrl`, `displayName`, `reason`을 받는 JSON payload를 사용한다. payload/validation/audit 포인트가 달라서 단일 generic endpoint가 아닌 분리 계약을 유지한다.
 
 ## 15.10 Data Export / Import Jobs
 
@@ -980,6 +1034,7 @@ Computer 세션 템플릿.
 - `setting_value`
 - `setting_secret`
 - `setting_change_log`
+- `setting_change_request` (approval queue persistence; approval queue API는 P1)
 - `provider_connection`
 - `model_registry`
 - `execution_template`
@@ -989,12 +1044,14 @@ Computer 세션 템플릿.
 - `plan_entitlement`
 - 카테고리 조회/저장/검증/검색 API
 - provider connection test API
+- approval queue CRUD API (`GET`, `POST`, `approve`, `reject`)
 
 ### 후속 고도화 대상
 
 - `setting_snapshot`
 - 세밀한 스코프 override
-- 승인 큐/승인 워크플로우 고도화
+- 승인 큐 UI/UX 고도화 (복잡한 approval workflow 규칙, 다단계 승인 체인)
+- `function_definition` (v1/P2, Functions 확장 기능 단계)
 - 대규모 bulk import/export
 - UI 메타데이터 기반 동적 폼 렌더링 100% 자동화
 - 외부 KMS 연동

@@ -133,7 +133,7 @@ Admin
   - Interface
   - Audio
   - Images
-  - Pipelines
+  - Pipelines (v1 예약)
   - Billing & Plans
   - Security & Audit
   - Database & Data Ops
@@ -654,6 +654,8 @@ OpenWebUI에는 직접적인 상위 카테고리로 강하게 드러나지 않�
 ---
 
 ### 13.14 Pipelines
+
+> **출시 단계**: v1/P2 예약 범위 (Phase 9). 부모 Settings 구조에는 카테고리로 존재하지만, 실제 기능 노출과 운영은 Functions/Pipelines 확장 기능 단계(v1 이후)에서 한다. MVP에서는 탭 예약 상태만 유지한다.
 
 #### OpenWebUI 호환 항목
 

@@ -241,6 +241,7 @@ Batch 10 Extensions & Optimization
 - `setting_definition`
 - `setting_value`
 - `setting_secret`
+- `setting_change_request`
 - `setting_validation_run`
 - `setting_test_run`
 - `session_secret_mount`
@@ -250,6 +251,7 @@ Batch 10 Extensions & Optimization
 ### 이유
 
 - 관리자 콘솔과 운영 구조의 기반
+- `setting_change_request`는 고위험 설정 변경의 approval queue 엔터티다. approval queue API(P1)가 실제로 저장 가능한 구조가 되려면 이 배치에서 persistence를 확보해야 한다.
 - `session_secret_mount`가 `setting_secret`를 직접 참조하는 경우 이 배치에서 함께 잡는 편이 FK/운영 경계에 더 안전하다.
 
 ---
@@ -277,8 +279,9 @@ Batch 10 Extensions & Optimization
 
 ## 15. Batch 10 Extensions & Optimization
 
-### 예시
+### 예시 (v1/P2 단계 추가 후보)
 
+- `function_definition` — Functions(v1/P2) 구현 시 이 배치에 추가되는 대표 canonical 테이블. admin-managed 실행 확장/함수 메타데이터를 저장한다.
 - 검색 인덱스용 보조 테이블
 - analytics aggregation 테이블
 - recommendation / cache materialization
